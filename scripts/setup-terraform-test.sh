@@ -22,7 +22,11 @@ ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
 # shellcheck source=scripts/common.sh
 source "$ROOT"/scripts/common.sh
 
-rm "$ROOT/terraform.tfvars"
+TFVARS_FILE="$ROOT/terraform.tfvars"
+if [[ -f "${TFVARS_FILE}" ]]
+then
+ rm "$ROOT/terraform.tfvars"
+fi
 
 # Generate the variables to be used by Terraform
 # shellcheck source=scripts/generate-tfvars.sh
