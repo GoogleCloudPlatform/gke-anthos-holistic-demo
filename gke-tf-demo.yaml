@@ -1,0 +1,62 @@
+# Copyright 2018 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+kind: "gke-cluster"
+metadata:
+  name: "demo-cluster"
+spec:
+  private: true
+  region: "us-central1" # asia-northeast1, europe-west2, southamerica-east1
+  regional: true
+  addons:
+    istio: false
+    logging: "logging.googleapis.com/kubernetes"
+    monitoring: "monitoring.googleapis.com/kubernetes"
+    networkPolicy: true
+    podSecurityPolicy: false
+    hpa: true
+    binaryAuth: true
+    httpLoadBalancing: true
+  labels:
+    generated: "gke-tf"
+  network:
+    metadata:
+      name: "demo-network"
+    spec:
+      subnetName: "demo-subnet"
+      subnetRange: "10.0.0.0/24"
+      podSubnetRange: "10.1.0.0/16"
+      serviceSubnetRange: "10.2.0.0/20"
+      masterIPV4CIDRBlock: "172.16.0.16/28"
+  version: "latest"
+  masterAuthorizedNetworksConfig:
+    - cidrBlock: "10.0.0.0/24"
+      displayName: "Local Admin Range"
+  nodePools:
+    - metadata:
+        name: "demo-1"
+      spec:
+        diskSizeGB: 30
+        diskType: "pd-ssd"
+        initialNodeCount: 1
+        machineType: "n1-standard-2"
+        minCount: 1
+        maxCount: 3
+        oauthScopes:
+        - "https://www.googleapis.com/auth/devstorage.read_only"
+        - "https://www.googleapis.com/auth/logging.write"
+        - "https://www.googleapis.com/auth/monitoring"
+        - "https://www.googleapis.com/auth/servicecontrol"
+        - "https://www.googleapis.com/auth/service.management.readonly"
+        - "https://www.googleapis.com/auth/trace.append"
