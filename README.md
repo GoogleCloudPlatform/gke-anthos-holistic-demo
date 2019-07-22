@@ -140,7 +140,7 @@ With `gke-tf` in your `$PATH`, generate the Terraform necessary to build the clu
 export PROJECT="$(gcloud config list project --format='value(core.project)')"
 gke-tf gen -d ./terraform -f gke-tf-demo.yaml -o -p ${PROJECT}
 
-I0719 16:05:08.219900   57205 gen.go:78] 
+I0719 16:05:08.219900   57205 gen.go:78]
 +-------------------------------------------------------------------+
 |    __.--/)  .-~~   ~~>>>>>>>>   .-.    gke-tf                     |
 |   (._\~  \ (        ~~>>>>>>>>.~.-'                               |
@@ -164,7 +164,7 @@ Review the generated Terraform files in the `terraform` directory to understand 
 Next, apply the terraform configuration with:
 
 ```console
-cd terraform 
+cd terraform
 terraform init
 terraform plan
 terraform apply
@@ -264,8 +264,8 @@ terraform destroy
 
 ```console
 ...snip...
-google_compute_network.demo-network: Still destroying... (ID: demo-netowrk, 10s elapsed)
-google_compute_network.demo-network: Still destroying... (ID: demo-netowrk, 20s elapsed)
+google_compute_network.demo-network: Still destroying... (ID: demo-network, 10s elapsed)
+google_compute_network.demo-network: Still destroying... (ID: demo-network, 20s elapsed)
 google_compute_network.demo-network: Destruction complete after 25s
 
 Destroy complete! Resources: 20 destroyed.
