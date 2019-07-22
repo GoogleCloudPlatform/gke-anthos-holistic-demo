@@ -16,7 +16,7 @@ limitations under the License.
 
 /*
 Note: This file needs to be added as part of cluster configuration at the time
-of cluster creation 
+of cluster creation
 */
 ///////////////////////////////////////////////////////////////////////////////////////
 // Create the resources needed for the Stackdriver Export Sinks
@@ -41,7 +41,9 @@ resource "google_storage_bucket" "gke-log-bucket" {
 resource "google_bigquery_dataset" "gke-bigquery-dataset" {
   dataset_id                  = "gke_logs_dataset"
   location                    = "US"
+  delete_contents_on_destroy =  true
   default_table_expiration_ms = 3600000
+
 
   labels = {
     env = "default"
@@ -59,7 +61,7 @@ resource "google_bigquery_dataset" "gke-bigquery-dataset" {
 resource "google_logging_project_sink" "storage-sink" {
   name        = "gke-storage-sink"
   destination = "storage.googleapis.com/${google_storage_bucket.gke-log-bucket.name}"
-  filter      = "resource.type = container"
+  filter      = "resource.type = k8s_container"
 
   unique_writer_identity = true
 }
@@ -68,7 +70,7 @@ resource "google_logging_project_sink" "storage-sink" {
 resource "google_logging_project_sink" "bigquery-sink" {
   name        = "gke-bigquery-sink"
   destination = "bigquery.googleapis.com/projects/${var.project}/datasets/${google_bigquery_dataset.gke-bigquery-dataset.dataset_id}"
-  filter      = "resource.type = container"
+  filter      = "resource.type = k8s_container"
 
   unique_writer_identity = true
 }
@@ -90,4 +92,3 @@ resource "google_project_iam_binding" "log-writer-bigquery" {
     google_logging_project_sink.bigquery-sink.writer_identity,
   ]
 }
-

@@ -4,40 +4,34 @@
 * [Introduction](#introduction)
 * [Architecture](#architecture)
 * [Prerequisites](#prerequisites)
-  * [Cloud Project](#cloud-project)
-  * [Install Cloud SDK](#install-cloud-sdk)
-  * [Install Kubectl](#install-kubectl)
-  * [Install Terraform](#install-terraform)
-  * [Configure Authentication](#configure-authentication)
+   * [Tools](#tools)
+      * [Install Cloud SDK](#install-cloud-sdk)
+      * [Install kubectl CLI](#install-kubectl-cli)
+      * [Install Terraform](#install-terraform)
+   * [Configure Authentication](#configure-authentication)
 * [Deployment](#deployment)
-  * [Create a new Stackdriver Account](#create-a-new-stackdriver-account)
-  * [Deploying the cluster](#deploying-the-cluster)
-  * [How does Terraform work?](#how-does-terraform-work)
-* [Validation](#validation)
-  * [Using Stackdriver Kubernetes Monitoring](#using-stackdriver-kubernetes-monitoring)
-    * [Native Prometheus integration](#native-prometheus-integration)
-* [Teardown](#teardown)
+   * [Create a new Stackdriver Account](#create-a-new-stackdriver-account)
+   * [Using Stackdriver Kubernetes Monitoring](#using-stackdriver-kubernetes-monitoring)
 * [Troubleshooting](#troubleshooting)
 * [Relevant Material](#relevant-material)
 
 ## Introduction
-[Stackdriver Kubernetes Monitoring](https://cloud.google.com/monitoring/kubernetes-engine/) is a new Stackdriver feature that more tightly integrates with GKE to better show you key stats about your cluster and the workloads and services running in it. Included in the new feature is functionality to import, as native Stackdriver metrics, metrics from pods with Prometheus endpoints. This allows you to use Stackdriver native alerting functionality with your Prometheus metrics without any additional workload.
+[Stackdriver Kubernetes Monitoring](https://cloud.google.com/monitoring/kubernetes-engine/) is a Stackdriver feature that more tightly integrates with GKE to better show you key stats about your cluster and the workloads and services running in it. Included in the new feature is functionality to import, as native Stackdriver metrics, metrics from pods with Prometheus endpoints. This allows you to use Stackdriver native alerting functionality with your Prometheus metrics without any additional workload.
 
-This tutorial will walk you through setting up Monitoring and visualizing metrics from a Kubernetes Engine cluster.  It makes use of [Terraform](https://www.terraform.io/), a declarative [Infrastructure as Code](https://en.wikipedia.org/wiki/Infrastructure_as_Code) tool that enables configuration files to be used to automate the deployment and evolution of infrastructure in the cloud.  The logs from the Kubernetes Engine cluster will be leveraged to walk through the monitoring capabilities of Stackdriver.
+This tutorial will walk you through setting up Monitoring and visualizing metrics from a private GKE cluster.  It makes use of [Terraform](https://www.terraform.io/), a declarative [Infrastructure as Code](https://en.wikipedia.org/wiki/Infrastructure_as_Code) tool that enables configuration files to be used to automate the deployment and evolution of infrastructure in the cloud.  The logs from the Kubernetes Engine cluster will be leveraged to walk through the monitoring capabilities of Stackdriver.
 
-**Note:** The setup of the Stackdriver Monitoring workspace is not automated with a script because it is currently not supported through Terraform or via the gcloud command line tool.
 
 ## Architecture
 
-The tutorial will create a Kubernetes Engine cluster that has a sample application deployed to it.  The logging and metrics for the cluster are loaded into Stackdriver Logging by default.  In the tutorial a Stackdriver Monitoring account will be setup to view the metrics captured.
+The tutorial will walk you through logging and metrics for the cluster loaded into Stackdriver Logging by default.  In the tutorial a Stackdriver Monitoring account will be setup to view the metrics captured for a Kubernetes Engine cluster.
 
 ![Monitoring Architecture](docs/architecture.png)
 
 ## Prerequisites
 
 ### Tools
-1. [Terraform >= 0.11.7](https://www.terraform.io/downloads.html)
-2. [Google Cloud SDK version >= 204.0.0](https://cloud.google.com/sdk/docs/downloads-versioned-archives)
+1. [Terraform >= 0.12.3](https://www.terraform.io/downloads.html)
+2. [Google Cloud SDK version >= 244.0.0](https://cloud.google.com/sdk/docs/downloads-versioned-archives)
 3. [kubectl matching the latest GKE version](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
 
 You can obtain a [free trial of GCP](https://cloud.google.com/free/) if you need one
@@ -67,6 +61,8 @@ $ gcloud auth application-default login
 
 ## Deployment
 
+Make sure that the Kubernetes Engine cluster has been created by the [instructions at the root of this repository](../../README.md).
+
 In this section we will create a Stackdriver Monitoring account so that we can explore the capabilities of the Monitoring console.
 
 ### Create a new Stackdriver Account
@@ -89,10 +85,6 @@ The following steps are used to setup a Stackdriver Monitoring account.
 
 For a thorough guide on how to observe your cluster with the new Stackdriver Kubernetes UI, see [Observing Your Kubernetes Clusters](https://cloud.google.com/monitoring/kubernetes-engine/observing).
 
-#### Native Prometheus integration
-
-The Terraform code included a Stackdriver alerting policy that is watching a metric that was originally imported from a Prometheus endpoint.
-From the Stackdriver main page, click on `Alerting` then `Policies Overview` to show all the policies, including the alerting policy called `Prometheus mem alloc`. Clicking on the policy will provide much more detail.
 
 ## Troubleshooting
 

@@ -5,20 +5,21 @@
 * [Introduction](#introduction)
 * [Architecture](#architecture)
 * [Prerequisites](#prerequisites)
-  * [Enable GCP APIs](#enable-gcp-apis)
-  * [Install Cloud SDK](#install-cloud-sdk)
-  * [Install Terraform](#install-terraform)
+   * [Cloud Project](#cloud-project)
+   * [Required GCP APIs](#required-gcp-apis)
+   * [Tools](#tools)
+      * [Install Cloud SDK](#install-cloud-sdk)
+      * [Install kubectl CLI](#install-kubectl-cli)
+      * [Install Terraform](#install-terraform)
+   * [Configure Authentication](#configure-authentication)
 * [Deployment](#deployment)
-  * [How does it work?](#how-does-it-work)
-  * [Running Terraform](#running-terraform)
 * [Validation](#validation)
-  * [Generating Logs](#generating-logs)
-  * [Logs in the Stackdriver UI](#logs-in-the-stackdriver-ui)
-  * [Viewing Log Exports](#viewing-log-exports)
-  * [Logs in Cloud Storage](#logs-in-cloud-storage)
-  * [Logs in BigQuery](#logs-in-bigquery)
+   * [Logs in the Stackdriver UI](#logs-in-the-stackdriver-ui)
+   * [Viewing Log Exports](#viewing-log-exports)
+   * [Logs in Cloud Storage](#logs-in-cloud-storage)
+   * [Logs in BigQuery](#logs-in-bigquery)
 * [Teardown](#teardown)
-  * [Next Steps](#next-steps)
+   * [Next Steps](#next-steps)
 * [Troubleshooting](#troubleshooting)
 * [Relevant Material](#relevant-material)
 
@@ -28,11 +29,11 @@ Stackdriver Logging can be used aggregate logs from all GCP resources as well as
 * Pub/Sub
 * BigQuery
 
-This document will describe the steps required to deploy a sample application to Kubernetes Engine that forwards log events to [Stackdriver Logging](https://cloud.google.com/logging/). It makes use of [Terraform](https://www.terraform.io/), a declarative [Infrastructure as Code](https://en.wikipedia.org/wiki/Infrastructure_as_Code) tool that enables configuration files to be used to automate the deployment and evolution of infrastructure in the cloud.  The configuration will also create a Cloud Storage bucket and a BigQuery dataset for exporting log data to.
+This document will describe the steps required to create GCS and Bigquery sinks that forwards log events from the private cluster created to [Stackdriver Logging](https://cloud.google.com/logging/). It makes use of [Terraform](https://www.terraform.io/), a declarative [Infrastructure as Code](https://en.wikipedia.org/wiki/Infrastructure_as_Code) tool that enables configuration files to be used to automate the deployment and evolution of infrastructure in the cloud.  The configuration will also create a Cloud Storage bucket and a BigQuery dataset for exporting log data to.
 
 ## Architecture
 
-The Terraform configurations are going to build a Kubernetes Engine cluster that will generate logs and metrics that can be ingested by Stackdriver.  The scripts will also build out Logging Export Sinks for Cloud Storage, BigQuery, and Cloud Pub/Sub.  The diagram of how this will look along with the data flow can be seen in the following graphic.
+The Terraform configurations scripts will build out Logging Export Sinks for Cloud Storage, BigQuery.  The diagram of how this will look along with the data flow can be seen in the following graphic.
 
 ![Logging Architecture](docs/logging-architecture.png)
 
@@ -54,8 +55,8 @@ The following APIs will be enabled in the
 * BigQuery API
 
 ### Tools
-1. [Terraform >= 0.11.7](https://www.terraform.io/downloads.html)
-2. [Google Cloud SDK version >= 204.0.0](https://cloud.google.com/sdk/docs/downloads-versioned-archives)
+1. [Terraform >= 0.12.3](https://www.terraform.io/downloads.html)
+2. [Google Cloud SDK version >= 244.0.0](https://cloud.google.com/sdk/docs/downloads-versioned-archives)
 3. [kubectl matching the latest GKE version](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
 4. bash or bash compatible shell
 5. [GNU Make 3.x or later](https://www.gnu.org/software/make/)
@@ -82,26 +83,26 @@ The Terraform configuration will execute against your GCP environment and create
 
 `gcloud auth application-default login`
 
+## Deployment
+
+The steps below will walk you through using terraform to deploy Stackdriver resources to a Kubernetes Engine cluster created by the [instructions at the root of this repository](../../README.md).
+
+```console
+# From within the project root, use make to apply the terraform
+make create
+```
+
+```console
+...snip...
+Apply complete! Resources: 7 added, 0 changed, 0 destroyed.
+
+```
 
 ## Validation
 
-If no errors are displayed during deployment, after a few minutes you should see your Kubernetes Engine cluster in the [GCP Console](https://console.cloud.google.com/kubernetes) with the sample application deployed.
+If no errors are displayed during deployment, after a few minutes you should see your Storage bucket and bigquery datasets created on your project.
 
-Now that the application is deployed to Kubernetes Engine we can generate log data and use the [Stackdriver UI](https://console.cloud.google.com/logs) and other tools to view it.
-
-### Generating Logs
-
-The sample application that Terraform deployed serves up a simple web page.  Each time you open this application in your browser the application will publish log events to Stackdriver Logging. Refresh the page a few times to produce several log events.
-
-To get the URL for the application page you must perform the following steps:
-
-1. In the GCP console navigate to the **Networking -> Network services** page.
-2. On the default **Load balancing** page that shows up, click on the TCP load balancer that was setup.
-3. On the **Load balancer details** page there is a top section labeled **Frontend**.  Note the IP:Port value as this will be used in the upcoming steps.
-
-Using the IP:Port value you can now access the application.  Go to a browser and enter the URL.  The browser should return a screen that looks similar to the following:
-
-![Sample application screen](docs/application-screen.png)
+We can use the [Stackdriver UI](https://console.cloud.google.com/logs) and other tools to view it.
 
 ### Logs in the Stackdriver UI
 
@@ -173,14 +174,10 @@ To access the Stackdriver logs in BigQuery perform the following steps:
 
 ## Teardown
 
-When you are finished with this example you will want to clean up thebigquery data set before tearing down the cluster.
+When you are finished with this example you will want to clean up the bigquery data set before tearing down the cluster.
 
 ```
-
-git add teardown.sh
-git commit -m ‘<Description>’
-git push origin master
-
+make teardown
 ```
 
 Since Terraform tracks the resources it created it is able to tear them all down.
