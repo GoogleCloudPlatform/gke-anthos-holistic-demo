@@ -14,153 +14,107 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Provides access to available Google Container Engine versions in a zone for a given project.
-// https://www.terraform.io/docs/providers/google/d/google_container_engine_versions.html
-data "google_container_engine_versions" "on-prem" {
-  zone    = var.zone
+/*
+Defines a random string to use as our role name suffix to ensure uniqueness.
+See https://www.terraform.io/docs/providers/random/r/string.html
+*/
+resource "random_string" "role_suffix" {
+  length  = 8
+  special = false
+}
+
+/*
+Define a read-only role for API access
+See https://www.terraform.io/docs/providers/google/r/google_project_iam_custom_role.html
+*/
+resource "google_project_iam_custom_role" "kube-api-ro" {
+  // Randomize the name to avoid collisions with deleted roles
+  // (Deleted roles prevent similarly named roles from being created for up to 30 days)
+  // See https://cloud.google.com/iam/docs/creating-custom-roles#deleting_a_custom_role
+  role_id = format("kube_api_ro_%s", random_string.role_suffix.result)
+
+  title       = "Kubernetes API (RO)"
+  description = "Grants read-only API access that can be further restricted with RBAC"
+
+  permissions = [
+    "container.apiServices.get",
+    "container.apiServices.list",
+    "container.clusters.get",
+    "container.clusters.getCredentials",
+  ]
+}
+
+resource "google_service_account" "owner" {
+  account_id   = "gke-tutorial-owner-rbac"
+  display_name = "GKE Tutorial Owner RBAC"
+}
+
+resource "google_service_account" "auditor" {
+  account_id   = "gke-tutorial-auditor-rbac"
+  display_name = "GKE Tutorial Auditor RBAC"
+}
+
+resource "google_service_account" "admin" {
+  account_id   = "gke-tutorial-admin-rbac"
+  display_name = "GKE Tutorial Admin RBAC"
+}
+
+resource "google_service_account_key" "owner_key" {
+  service_account_id = "${google_service_account.owner.name}"
+}
+
+resource "google_service_account_key" "auditor_key" {
+  service_account_id = "${google_service_account.auditor.name}"
+}
+
+resource "google_service_account_key" "admin_key" {
+  service_account_id = "${google_service_account.admin.name}"
+}
+
+resource "google_project_iam_binding" "kube-api-ro" {
+  role = format("projects/%s/roles/%s", var.project, google_project_iam_custom_role.kube-api-ro.role_id)
+
+  members = [
+    format("serviceAccount:%s", google_service_account.owner.email),
+    format("serviceAccount:%s", google_service_account.auditor.email),
+  ]
+}
+
+resource "google_project_iam_member" "kube-api-admin" {
   project = var.project
+  role    = "roles/container.admin"
+  member  = format("serviceAccount:%s", google_service_account.admin.email)
 }
 
-// https://www.terraform.io/docs/providers/google/r/google_container_cluster.html
-// Create the primary cluster for this project.
+// https://www.terraform.io/docs/providers/template/index.html
+// render the rbac.yaml to include generated service account names
+data "template_file" "rbac_yaml" {
+  template = "${file("${path.module}/templates/rbac.yaml")}"
 
-module "network" {
-  source   = "./modules/network"
-  project  = var.project
-  region   = var.region
-  vpc_name = var.vpc_name
-}
-
-module "firewall" {
-  source   = "./modules/firewall"
-  project  = var.project
-  vpc_name = module.network.network_self_link
-  net_tags = var.bastion_tags
-}
-
-module "bastion" {
-  source                = "./modules/instance"
-  project               = var.project
-  hostname              = "gke-tutorial-admin"
-  machine_type          = var.bastion_machine_type
-  zone                  = var.zone
-  tags                  = var.bastion_tags
-  cluster_subnet        = module.network.subnet_self_link
-  cluster_name          = var.cluster_name
-  owner_email           = google_service_account.owner.email
-  auditor_email         = google_service_account.auditor.email
-  service_account_email = google_service_account.admin.email
-  grant_cluster_admin   = "1"
-}
-
-module "owner_instance" {
-  source                = "./modules/instance"
-  project               = var.project
-  hostname              = "gke-tutorial-owner"
-  machine_type          = var.bastion_machine_type
-  zone                  = var.zone
-  tags                  = var.bastion_tags
-  cluster_subnet        = module.network.subnet_self_link
-  cluster_name          = var.cluster_name
-  owner_email           = google_service_account.owner.email
-  auditor_email         = google_service_account.auditor.email
-  service_account_email = google_service_account.owner.email
-}
-
-module "auditor_instance" {
-  source                = "./modules/instance"
-  project               = var.project
-  hostname              = "gke-tutorial-auditor"
-  machine_type          = var.bastion_machine_type
-  zone                  = var.zone
-  tags                  = var.bastion_tags
-  cluster_subnet        = module.network.subnet_self_link
-  cluster_name          = var.cluster_name
-  owner_email           = google_service_account.owner.email
-  auditor_email         = google_service_account.auditor.email
-  service_account_email = google_service_account.auditor.email
-}
-
-resource "google_container_cluster" "primary" {
-  name               = var.cluster_name
-  project            = var.project
-  zone               = var.zone
-  network            = module.network.network_self_link
-  subnetwork         = module.network.subnet_self_link
-  min_master_version = data.google_container_engine_versions.on-prem.latest_master_version
-  initial_node_count = var.initial_node_count
-
-  lifecycle {
-    ignore_changes = [ip_allocation_policy[0].services_secondary_range_name]
-  }
-
-  node_locations = []
-
-  // Scopes necessary for the nodes to function correctly
-  node_config {
-    oauth_scopes = [
-      "https://www.googleapis.com/auth/compute",
-      "https://www.googleapis.com/auth/devstorage.read_only",
-      "https://www.googleapis.com/auth/logging.write",
-      "https://www.googleapis.com/auth/monitoring",
-    ]
-
-    machine_type = var.node_machine_type
-    image_type   = "COS"
-
-    // (Optional) The Kubernetes labels (key/value pairs) to be applied to each node.
-    labels = {
-      status = "poc"
-    }
-
-    // (Optional) The list of instance tags applied to all nodes.
-    // Tags are used to identify valid sources or targets for network firewalls.
-    tags = ["poc"]
-  }
-
-  // (Required for private cluster, optional otherwise) Configuration for cluster IP allocation.
-  // As of now, only pre-allocated subnetworks (custom type with
-  // secondary ranges) are supported. This will activate IP aliases.
-  ip_allocation_policy {
-    cluster_secondary_range_name = "secondary-range"
-  }
-
-  // In a private cluster, the master has two IP addresses, one public and one
-  // private. Nodes communicate to the master through this private IP address.
-  private_cluster_config {
-    enable_private_nodes   = true
-    master_ipv4_cidr_block = "10.0.90.0/28"
-  }
-
-  // (Required for private cluster, optional otherwise) network (cidr) from which cluster is accessible
-  master_authorized_networks_config {
-    cidr_blocks {
-      display_name = "gke-tutorial-admin"
-      cidr_block   = join("/", [module.bastion.external_ip, "32"])
-    }
-    cidr_blocks {
-      display_name = "gke-tutorial-owner"
-      cidr_block   = join("/", [module.owner_instance.external_ip, "32"])
-    }
-    cidr_blocks {
-      display_name = "gke-tutorial-auditor"
-      cidr_block   = join("/", [module.auditor_instance.external_ip, "32"])
-    }
-  }
-
-  // (Required for Calico, optional otherwise) Configuration options for the NetworkPolicy feature
-  network_policy {
-    enabled  = true
-    provider = "CALICO"
-  }
-
-  // (Required for network_policy enabled cluster, optional otherwise)
-  // Addons config supports other options as well, see:
-  // https://www.terraform.io/docs/providers/google/r/container_cluster.html#addons_config
-  addons_config {
-    network_policy_config {
-      disabled = false
-    }
+  vars = {
+    auditor_email = google_service_account.auditor.email
+    owner_email   = google_service_account.owner.email
   }
 }
 
+resource "null_resource" "render_rbac_yaml" {
+  provisioner "local-exec" {
+    command = "echo \"${data.template_file.rbac_yaml.rendered}\" > '${path.module}/../manifests/rbac.yaml'"
+  }
+}
+
+data "google_container_cluster" "base_cluster" {
+  name       = var.cluster_name
+  location   = var.region
+}
+
+resource "null_resource" "cluster_admin_binding" {
+  provisioner "local-exec" {
+    on_failure = "continue"
+    command = "kubectl get clusterrolebinding gke-tutorial-admin-binding &> /dev/null || kubectl create clusterrolebinding gke-tutorial-admin-binding --clusterrole cluster-admin --user ${google_service_account.admin.email}"
+    environment = {
+      HTTPS_PROXY = "localhost:8888"
+    } 
+  }
+  depends_on = [google_service_account.admin]
+}

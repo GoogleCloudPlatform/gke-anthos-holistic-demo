@@ -12,9 +12,7 @@
 * [Deployment](#deployment)
   * [Authenticate gcloud](#authenticate-gcloud)
   * [Configure gcloud settings](#configuring-gcloud-settings)
-  * [Setup this project](#setup-this-project)
-  * [Cluster Deployment](#cluster-deployment)
-  * [Provisioning the Kubernetes Engine Cluster](#provisioning-the-kubernetes-engine-cluster)
+  * [Provisioning the Applications and RBAC Configuration](#provisioning-the-applications-and-rbac-configuration)
 * [Validation](#validation)
 * [Scenario 1: Assigning permissions by user persona](#scenario-1-assigning-permissions-by-user-persona)
   * [IAM - Role](#iam---role)
@@ -80,13 +78,11 @@ gcloud init
 
 
 ### Tools
-1. [Terraform >= 0.11.7](https://www.terraform.io/downloads.html)
-2. [Google Cloud SDK version >= 204.0.0](https://cloud.google.com/sdk/docs/downloads-versioned-archives)
+1. [Terraform >= 0.12.3](https://www.terraform.io/downloads.html)
+2. [Google Cloud SDK version >= 244.0.0](https://cloud.google.com/sdk/docs/downloads-versioned-archives)
 3. [kubectl matching the latest GKE version](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
 4. bash or bash compatible shell
 5. [GNU Make 3.x or later](https://www.gnu.org/software/make/)
-6. A Google Cloud Platform project where you have permission to create
-   networks
 
 #### Install Cloud SDK
 The Google Cloud SDK is used to interact with your GCP resources.
@@ -105,7 +101,7 @@ Terraform is used to automate the manipulation of cloud infrastructure. Its
 
 ## Deployment
 
-The steps below will walk you through using terraform to deploy a Kubernetes Engine cluster that you will then use for installing test users, applications and RBAC roles.
+The steps below will walk you through using terraform to deploy applications and RBAC resources to a Kubernetes Engine cluster created by the [instructions at the root of this repository](../../README.md).
 
 ### Authenticate gcloud
 
@@ -117,46 +113,16 @@ gcloud auth application-default login
 
 ### Configure gcloud settings
 
-Run `gcloud config list` and make sure that `compute/zone`, `compute/region` and `core/project` are populated with values that work for you. You can set their values with the following commands:
+Run `gcloud config list` and make sure that `core/project` is still set to the same project where the Kubernetes cluster you created at the root of this repository resides. You can set the current value with the following commands:
 
 ```console
-# Where the region is us-east1
-gcloud config set compute/region us-east1
-
-Updated property [compute/region].
-```
-
-```console
-# Where the zone inside the region is us-east1-c
-gcloud config set compute/zone us-east1-c
-
-Updated property [compute/zone].
-```
-
-```console
-# Where the project name is my-project-name
-gcloud config set project my-project-name
+# Where the project name is my-project-id
+gcloud config set project my-project-id
 
 Updated property [core/project].
 ```
 
-### Setup this project
-
-This project requires the following Google Cloud Service APIs to be enabled:
-
-* `compute.googleapis.com`
-* `container.googleapis.com`
-* `cloudbuild.googleapis.com`
-
-In addition, the terraform configuration takes three parameters to determine where the Kubernetes Engine cluster should be created:
-
-* `project`
-* `region`
-* `zone`
-
-These parameters will be configured based on your gcloud default settings from the prior step.
-
-### Provisioning the Kubernetes Engine Cluster
+### Provisioning the Applications and RBAC Configuration
 
 Next, apply the terraform configuration with:
 
@@ -165,7 +131,7 @@ Next, apply the terraform configuration with:
 make create
 ```
 
-When prompted if you want to deploy the plan, review the generated plan and enter `yes` to deploy the environment.
+When prompted if you want to deploy the plan, review the generated plan and enter `yes` to deploy the changes to the environment.
 
 ## Validation
 
@@ -173,20 +139,51 @@ Once complete, terraform will output a message indicating successful creation of
 
 ```console
 ...snip...
-google_container_cluster.primary: Still creating... (2m50s elapsed)
-google_container_cluster.primary: Still creating... (3m0s elapsed)
-google_container_cluster.primary: Still creating... (3m10s elapsed)
-google_container_cluster.primary: Still creating... (3m20s elapsed)
-google_container_cluster.primary: Creation complete after 3m24s (ID: rbac-demo-cluster)
+Apply complete! Resources: 12 added, 0 changed, 0 destroyed.
 
-Apply complete! Resources: 14 added, 0 changed, 0 destroyed.
+Outputs:
+
+admin_sa_key = <sensitive>
+admin_sa_name = gke-tutorial-admin-rbac@my-project-id.iam.gserviceaccount.com
+auditor_sa_key = <sensitive>
+auditor_sa_name = gke-tutorial-auditor-rbac@my-project-id.iam.gserviceaccount.com
+owner_sa_key = <sensitive>
+owner_sa_name = gke-tutorial-owner-rbac@my-project-id.iam.gserviceaccount.com
 ```
 
-You can also confirm the cluster was created successfully by logging into the cloud console and ensuring that Legacy Authorization is disabled for the new cluster.
-
-![Cluster settings in console](./img/cluster_in_console_updated.png)
-
 ## Scenario 1: Assigning permissions by user persona
+
+### Accessing the Private Cluster
+
+This demo runs on top of the private GKE cluster built via the instructions at the base of this repository.  To access the private GKE API Server (aka "master" or "control plane"), this infrastructure includes a small GCE instance known as a "bastion host" which supports SSH "tunneling and HTTP proxying" to allow remote API Server access in a more secure manner.
+
+During the `make create` step, the following command was run and should _still be running in the background_:
+
+```console
+echo $(terraform output --state=../../terraform/terraform.tfstate bastion_ssh) -f tail -f /dev/null
+
+gcloud compute ssh demo-cluster-bastion --project my-project-id --zone us-central1-a -- -L8888:127.0.0.1:8888 -f tail -f /dev/null
+```
+
+This command creates an SSH tunnel to the `demo-cluster-bastion` GCE instance, forwards the **L**ocal host's port `8888` to `127.0.0.1:8888` on `demo-cluster-bastion`, runs this SSH in the background (`-f`), and runs a command that doesn't end (`tail -f /dev/null`).
+
+With this "SSH Tunnel" running in the background, any web traffic sent to our `localhost:8888` will be sent down the tunnel and connect to the [tiny proxy](https://tinyproxy.github.io/) instance running on the `demo-cluster-bastion` host listening on `localhost:8888`.
+
+Because `kubectl` honors the `HTTPS_PROXY` environment variable, this means that our `kubectl` commands can be sent securely over the SSH tunnel and through the HTTP(S) proxy and reach the GKE control plane inside that VPC network via its private IP.
+
+While it's possible to run `export HTTPS_PROXY=localhost:8888` in the current session, that environment variable is honored by other applications, which might not be desirable.  For the duration of this terminal session, setting a simple shell alias will make all `kubectl` commands use the SSH tunnel's HTTP proxy:
+
+```console
+alias kubectl="HTTPS_PROXY=localhost:8888 kubectl"
+```
+
+Now, every time `kubectl` is used within this terminal session, the shell will silently replace it with `HTTPS_PROXY=localhost:8888 kubectl`, and the connection will work as expected.
+
+To remove the alias if needed, run:
+
+```console
+unalias kubectl
+```
 
 ### IAM - Role
 
@@ -214,33 +211,15 @@ GKE Tutorial Auditor                    gke-tutorial-auditor@myproject.iam.gserv
 GKE Tutorial Owner                      gke-tutorial-owner@myproject.iam.gserviceaccount.com
 ```
 
-Three test hosts have been provisioned by the terraform script. Each node has `kubectl` and `gcloud` installed and configured to simulate a different user persona.
-
-* __gke-tutorial-admin__: kubectl and gcloud are authenticated as a cluster administrator.
-* __gke-tutorial-owner__: simulates the 'owner' account
-* __gke-tutorial-auditor__: simulates the 'auditor'account
-
-```console
-gcloud compute instances list
-
-NAME                                             ZONE           MACHINE_TYPE   PREEMPTIBLE  INTERNAL_IP  EXTERNAL_IP     STATUS
-rbac-demo-cluster-default-pool-a9cd3468-4vpc    us-central1-a  n1-standard-1                10.0.96.5                    RUNNING
-rbac-demo-cluster-default-pool-a9cd3468-b47f    us-central1-a  n1-standard-1                10.0.96.6                    RUNNING
-rbac-demo-cluster-default-pool-a9cd3468-rt5p    us-central1-a  n1-standard-1                10.0.96.7                    RUNNING
-gke-tutorial-auditor                            us-central1-a  f1-micro                     10.0.96.4    35.224.148.28    RUNNING
-gke-tutorial-admin                              us-central1-a  f1-micro                     10.0.96.3    35.226.237.142   RUNNING
-gke-tutorial-owner                              us-central1-a  f1-micro                     10.0.96.2    35.194.58.130    RUNNING
-```
-
 ### Creating the RBAC rules
 
-Create the the namespaces, Roles, and RoleBindings by logging into the admin instance and applying the `rbac.yaml` manifest:
-
-Input:
+Create the the namespaces, Roles, and RoleBindings by applying the `rbac.yaml` manifest:
 
 ```console
-# SSH to the admin
-gcloud compute ssh gke-tutorial-admin
+# Switch to the admin SA
+make admin
+
+Switching to SA: admin
 ```
 
 Create the namespaces, roles, and bindings
@@ -259,14 +238,14 @@ rolebinding.rbac.authorization.k8s.io "auditor-binding" created
 
 ### Managing resources as the owner
 
-In a new terminal, ssh into the owner instance and create a simple deployment in each namespace:
-
 ```console
-# SSH to the "owner" instance
-gcloud compute ssh gke-tutorial-owner
+# Switch to the owner SA
+make owner
+
+Switching to SA: owner
 ```
 
-Create a server in each namespace:
+Create a `hello-server` deployment in each namespace:
 
 ```console
 kubectl create -n dev -f ./manifests/hello-server.yaml
@@ -292,8 +271,6 @@ deployment.apps/hello-server created
 As the owner, you will also be able to view all pods:
 
 ```console
-# On the "owner" instance
-
 # List all hello-server pods in all namespaces
 kubectl get pods -l app=hello-server --all-namespaces
 
@@ -305,18 +282,16 @@ test        hello-server-6c6fd59cc9-sm6bs   1/1       Running   0          39s
 
 ### Viewing resources as the auditor
 
-In a new terminal, ssh into the auditor instance and try to view all namespaces:
-
 ```console
-# SSH to the "auditor" instance
-gcloud compute ssh gke-tutorial-auditor
+# Switch to the "auditor" SA
+make auditor
+
+Switching to SA: auditor
 ```
 
 Attempt to list all pods
 
 ```console
-# On the "auditor" instance
-
 # List all hello-server pods in all namespaces
 kubectl get pods -l app=hello-server --all-namespaces
 
@@ -328,7 +303,6 @@ The error indicates you don't have sufficient permissions. The auditor is restri
 Attempt to view pods in the dev namespace
 
 ```console
-# On the "auditor" instance
 kubectl get pods -l app=hello-server --namespace=dev
 
 NAME                            READY     STATUS    RESTARTS   AGE
@@ -338,7 +312,6 @@ hello-server-6c6fd59cc9-h6zg9   1/1       Running   0          13m
 Attempt to view pods in the test namespace
 
 ```console
-# On the "auditor" instance
 kubectl get pods -l app=hello-server --namespace=test
 
 Error from server (Forbidden): pods is forbidden: User "gke-tutorial-auditor@myproject.iam.gserviceaccount.com" cannot list pods in the namespace "test": Required "container.pods.list" permission.
@@ -347,7 +320,6 @@ Error from server (Forbidden): pods is forbidden: User "gke-tutorial-auditor@myp
 Attempt to view pods in the prod namespace
 
 ```console
-# On the "auditor" instance
 kubectl get pods -l app=hello-server --namespace=prod
 
 Error from server (Forbidden): pods is forbidden: User "gke-tutorial-auditor@myproject.iam.gserviceaccount.com" cannot list pods in the namespace "prod": Required "container.pods.list" permission.
@@ -356,8 +328,6 @@ Error from server (Forbidden): pods is forbidden: User "gke-tutorial-auditor@myp
 Finally, verify the that the auditor has read-only access by trying to create and delete a deployment in the dev namespace:
 
 ```console
-# On the "auditor" instance
-
 # Attempt to create a deployment
 kubectl create -n dev -f manifests/hello-server.yaml
 
@@ -366,8 +336,6 @@ Error from server (Forbidden): error when creating "manifests/hello-server.yaml"
 ```
 
 ```console
-# On the "auditor" instance
-
 # Attempt to delete the deployment
 kubectl delete deployment -n dev -l app=hello-server
 
@@ -385,8 +353,10 @@ The sample application will run as a single pod that periodically retrieves all 
 Deploy the pod-labeler application. This will also deploy a Role, ServiceAccount, and RoleBinding for the pod.
 
 ```console
-# SSH to the admin instance
-gcloud compute ssh gke-tutorial-admin
+# Switch to the "admin" SA
+make admin
+
+Switching to SA: admin
 
 # Apply the pod-labeler configuration
 kubectl apply -f manifests/pod-labeler.yaml
@@ -402,7 +372,7 @@ deployment.apps/pod-labeler created
 Now check the status of the pod. Once the container has finished creating, you'll see it error out. Investigate the error by inspecting the pods' events and logs
 
 ```console
-# On the admin instance
+# Still as the admin SA
 
 # Check the pod status
 kubectl get pods -l app=pod-labeler
@@ -412,8 +382,6 @@ pod-labeler-6d9757c488-tk6sp   0/1       Error     1          1m
 ```
 
 ```console
-# On the admin instance
-
 # View the pod event stream
 kubectl describe pod -l app=pod-labeler | tail -n 20
 
@@ -421,18 +389,16 @@ Events:
   Type     Reason     Age                     From                                                       Message
   ----     ------     ----                    ----                                                       -------
   Normal   Scheduled  7m35s                   default-scheduler                                          Successfully assigned default/pod-labeler-5b4bd6cf9-w66jd to gke-rbac-demo-cluster-default-pool-3d348201-x0pk
-  Normal   Pulling    7m34s                   kubelet, gke-rbac-demo-cluster-default-pool-3d348201-x0pk  pulling image "gcr.io/pso-examples/pod-labeler:0.1.5"
-  Normal   Pulled     6m56s                   kubelet, gke-rbac-demo-cluster-default-pool-3d348201-x0pk  Successfully pulled image "gcr.io/pso-examples/pod-labeler:0.1.5"
-  Normal   Created    5m29s (x5 over 6m56s)   kubelet, gke-rbac-demo-cluster-default-pool-3d348201-x0pk  Created container
-  Normal   Pulled     5m29s (x4 over 6m54s)   kubelet, gke-rbac-demo-cluster-default-pool-3d348201-x0pk  Container image "gcr.io/pso-examples/pod-labeler:0.1.5" already present on machine
-  Normal   Started    5m28s (x5 over 6m56s)   kubelet, gke-rbac-demo-cluster-default-pool-3d348201-x0pk  Started container
-  Warning  BackOff    2m25s (x23 over 6m52s)  kubelet, gke-rbac-demo-cluster-default-pool-3d348201-x0pk  Back-off restarting failed container
+  Normal   Pulling    7m34s                   kubelet, gke-demo-cluster-default-pool-3d348201-x0pk  pulling image "gcr.io/pso-examples/pod-labeler:0.1.5"
+  Normal   Pulled     6m56s                   kubelet, gke-demo-cluster-default-pool-3d348201-x0pk  Successfully pulled image "gcr.io/pso-examples/pod-labeler:0.1.5"
+  Normal   Created    5m29s (x5 over 6m56s)   kubelet, gke-demo-cluster-default-pool-3d348201-x0pk  Created container
+  Normal   Pulled     5m29s (x4 over 6m54s)   kubelet, gke-demo-cluster-default-pool-3d348201-x0pk  Container image "gcr.io/pso-examples/pod-labeler:0.1.5" already present on machine
+  Normal   Started    5m28s (x5 over 6m56s)   kubelet, gke-demo-cluster-default-pool-3d348201-x0pk  Started container
+  Warning  BackOff    2m25s (x23 over 6m52s)  kubelet, gke-demo-cluster-default-pool-3d348201-x0pk  Back-off restarting failed container
 
 ```
 
 ```console
-# On the admin instance
-
 # Check the pod's logs
 kubectl logs -l app=pod-labeler
 
@@ -460,8 +426,6 @@ Based on this error, you can see a permissions error when trying to list pods vi
 By inspecting the pod's configuration, you can see it is using the default ServiceAccount rather than the custom Service Account:
 
 ```console
-# On the admin instance
-
 kubectl get pod -oyaml -l app=pod-labeler
 
 ...
@@ -482,8 +446,6 @@ The `pod-labeler-fix-1.yaml` file contains the fix in the deployment's template 
 Apply the fix and view the resulting change:
 
 ```console
-# On the admin instance
-
 # Apply the fix 1
 kubectl apply -f manifests/pod-labeler-fix-1.yaml
 
@@ -494,8 +456,6 @@ deployment.apps/pod-labeler configured
 ```
 
 ```console
-# On the admin instance
-
 # View the change in the deployment configuration
 kubectl get deployment pod-labeler -oyaml
 
@@ -510,11 +470,9 @@ kubectl get deployment pod-labeler -oyaml
 
 ### Diagnosing insufficient privileges
 
-Once again, check the status of your pod and you'll notice it is still erring out, but with a different message this time.
+Once again, check the status of the pod and you'll notice it is still erroring out, but with a different message this time.
 
 ```console
-# On the admin instance
-
 # Check the status of your pod
 kubectl get pods -l app=pod-labeler
 
@@ -524,8 +482,6 @@ pod-labeler-c7b4fd44d-mr8qh   0/1       CrashLoopBackOff   3          1m
 ```
 
 ```console
-# On the admin instance
-
 # Check the pod's logs
 kubectl logs -l app=pod-labeler
 
@@ -564,8 +520,6 @@ protoPayload.methodName="io.k8s.core.v1.pods.patch"
 Use the ClusterRoleBinding to find the ServiceAccount's Role and permissions
 
 ```yaml
-# On the admin instance
-
 # Inspect the rolebinding definition
 kubectl get rolebinding pod-labeler -oyaml
 
@@ -588,11 +542,9 @@ subjects:
   namespace: default
 ```
 
-The RoleBinding shows you need to inspect the `pod-labeler` Role in the default namespace. Here you can see the role is only granted permission to list pods.
+The RoleBinding shows you need to inspect the `pod-labeler` Role in the `default` namespace. Here you can see the role is only granted permission to list pods.
 
 ```yaml
-# On the admin instance
-
 # Inspect the role definition
 kubectl get role pod-labeler -oyaml
 
@@ -632,8 +584,6 @@ rules:
 Apply the fix and view the resulting configuration:
 
 ```console
-# On the admin instance
-
 # Apply Fix 2
 kubectl apply -f manifests/pod-labeler-fix-2.yaml
 
@@ -644,8 +594,6 @@ deployment.apps/pod-labeler configured
 ```
 
 ```console
-# On the admin instance
-
 # View the resulting change
 kubectl get role pod-labeler -oyaml
 
@@ -673,8 +621,6 @@ rules:
 Because the pod-labeler may be in a back-off loop, the quickest way to test our fix is to kill the existing pod and let a new one take it's place:
 
 ```console
-# On the admin instance
-
 # Kill the existing pod and let the deployment controller replace it
 kubectl delete pod -l app=pod-labeler
 
@@ -686,8 +632,6 @@ pod "pod-labeler-8845f6488-5fpt9" deleted
 Finally, verify the new pod-labeler is running and check that the "updated" label has been applied.
 
 ```console
-# On the admin instance
-
 # List all pods and show their labels
 kubectl get pods --show-labels
 
@@ -734,15 +678,37 @@ module.network.google_compute_network.gke-network: Destruction complete after 25
 Destroy complete! Resources: 14 destroyed.
 ```
 
+Gcloud is currently authenticated as one of the generated IAM service accounts.  To re-login as your primary gcloud user, run:
+
+```console
+gcloud auth login
+```
+
 ## Troubleshooting
+
+### My SSH Tunnel is no longer running.  How do I restart it?
+
+During the `make create` command, the `gcloud compute ssh` command is run to create the SSH tunnel, forward the local port `8888`, and background the session.  If it stops running and `kubectl` commands are no longer working, rerun it:
+
+```console
+`echo $(terraform output --state=../../terraform/terraform.tfstate bastion_ssh) -f tail -f /dev/null`
+```
+
+### My SSH Tunnel is still running in the background.  How do I stop it?
+
+Because `gcloud` leverages the host's SSH client binary to run SSH sessions, the process name may vary.  The most reliable method is to find the `process id` of the SSH session and run `kill <pid>` or `pkill <processname>`
+
+```console
+ps -ef | grep "ssh.*L8888:127.0.0.1:8888" | grep -v grep
+
+579761 83734     1   0  9:53AM ??         0:00.02 /usr/local/bin/gnubby-ssh -t -i /Users/myuser/.ssh/google_compute_engine -o CheckHostIP=no -o HostKeyAlias=compute.192NNNNNNNN -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=/Users/myuser/.ssh/google_compute_known_hosts myuser@bas.tion.ip.addr -L8888:127.0.0.1:8888 -f tail -f /dev/null /dev/null
+```
+
+In this case, running `pkill gnubby-ssh` or `kill 83734` would end this SSH session.
 
 ### The install script fails with a `Permission denied` when running Terraform
 
 The credentials that Terraform is using do not provide the necessary permissions to create resources in the selected projects. Ensure that the account listed in `gcloud config list` has necessary permissions to create resources. If it does, regenerate the application default credentials using `gcloud auth application-default login`.
-
-### Invalid fingerprint error during Terraform operations
-
-Terraform occasionally complains about an invalid fingerprint, when updating certain resources. If you see the error below, simply re-run the command. ![terraform fingerprint error](./img/terraform_fingerprint_error.png)
 
 ## Relevant Material
 
