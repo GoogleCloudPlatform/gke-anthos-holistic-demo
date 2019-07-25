@@ -161,9 +161,16 @@ gcloud container images list-tags "gcr.io/${PROJECT_ID}/nginx"
 
 ### Denying All Images
 
+In order for the default cluster's service account to have access to your cloud source repository, it must have the objectViewer role on the underlying storage bucket. This snippet will enable us to pull down images in our cluster:
+
+``` console
+CLUSTER_NAME=<CLUSTER_NAME>
+gsutil iam ch serviceAccount:${CLUSTER_NAME}-node-sa@${PROJECT}.iam.gserviceaccount.com:objectViewer gs://artifacts.${PROJECT}.appspot.com
+```
+
 To prove that image denial by policy will eventually work as intended, we need to first verify that the cluster-specific allow rule is in place and allows all containers to run.
 
-To do this, launch a single `nginx` pod,  by adding nginx.yaml into the git. Adding the manifest will apply the yaml file and create the pod.
+To do this, launch a single `nginx` pod,  by adding nginx.yaml into the git. Adding the manifest will apply the yaml file and create the pod. Replace ${PROJECT_ID} in nginx.yaml with your Project ID. You will place the nginx.yaml file in ./namespaces/default/. You will want to create the namespace.yaml file in the default folder as well if you have not done so. The [Audit Namespace Example](https://github.com/GoogleCloudPlatform/csp-config-management/blob/1.0.0/foo-corp/namespaces/audit/namespace.yaml) provides a good guide.
 
 ```console
 git add nginx.yaml
@@ -203,11 +210,23 @@ git push origin master
 
 This time, though, you should receive a message from the API server indicating that the policy prevented this pod from being successfully run. On the console, the details of this error can be found by looking at the events tab of the nginx workload.
 
+``` console
+alias n="HTTPS_PROXY=localhost:8888 nomos'
+n status
+k get events
+```
+
 To be able to see when any and all images are blocked by the Binary Authorization Policy, navigate to the GKE Audit Logs in Stackdriver and filter on those error messages related to this activity.
 
 1. In the GCP console navigate to the **Stackdriver** -> **Logging** page
 1. On this page, click the downward arrow on the far right of the "Filter by label or text search" input field, and select `Convert to advanced filter`.  Populate the text box with `resource.type="k8s_cluster" protoPayload.status.message="PERMISSION_DENIED"`
 1. You should see errors corresponding to the blocking of the `nginx` pod from running.
+
+
+Run the following to clean up and prepare for the next steps:
+```console
+ git rm --cached nginx.yaml
+```
 
 ### Denying Images Except From Whitelisted Container Registries
 
@@ -234,6 +253,8 @@ Run the following to clean up and prepare for the next steps:
 ```console
  git rm --cached nginx.yaml
 ```
+
+Note: Remove the image path exemption from the binary authorization policy in order to test attestations.
 
 ### Enforcing Attestations
 
@@ -465,8 +486,15 @@ Next, click on `Add Attestors` followed by `Add attestor by resource ID`.  Enter
 Now, obtain the most recent SHA256 Digest of the signed image from the previous steps:
 
 ```console
+# if you had not set earlier
 IMAGE_PATH="gcr.io/${PROJECT_ID}/nginx"
 IMAGE_DIGEST="$(gcloud container images list-tags --format='get(digest)' $IMAGE_PATH | head -1)"
+```
+
+Update nginx.yaml to use the fully-qualified digest:
+
+```console
+echo "${IMAGE_PATH}@${IMAGE_DIGEST} # Replace image in nginx.yaml
 ```
 
 Now, run the pod by adding nginx.yaml manifest to git and verify success:
@@ -479,6 +507,13 @@ git push origin master
 
 
 Congratulations! You have now manually attested to a container image and enforced a policy for that image inside your GKE cluster.
+
+Run the following to clean up and prepare for the next steps:
+
+```console
+ git rm --cached nginx.yaml
+```
+
 
 ### Handling Emergency Situations
 
@@ -499,6 +534,8 @@ git add nginx-breakglass.yaml
 git commit -m ‘<Description>’
 git push origin master
 ```
+
+In Stackdriver, you should be able to refresh and see the break glass nginx pod log.
 
 
 ## Troubleshooting
