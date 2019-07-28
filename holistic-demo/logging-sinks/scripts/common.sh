@@ -55,7 +55,7 @@ if [[ -z "${PROJECT}" ]]; then
 fi
 # the CLUSTER_NAME is used by validate.sh
 # shellcheck disable=SC2034
-CLUSTER_NAME=stackdriver-logging
+CLUSTER_NAME=demo-cluster
 
 # bigquery for GKE log
 # shellcheck disable=SC2034

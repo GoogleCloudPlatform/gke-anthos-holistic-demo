@@ -28,3 +28,9 @@ dist
 
 .terraform
 terraform.tfvars
+
+# Binary authz
+note_payload.json
+generated-key.pgp
+generated_payload.json
+generated_signature.pgp

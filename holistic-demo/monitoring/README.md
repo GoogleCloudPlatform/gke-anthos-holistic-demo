@@ -1,25 +1,25 @@
 # Monitoring with Stackdriver on Kubernetes Engine
 
 ## Table of Contents
+
+<!-- toc -->
 * [Introduction](#introduction)
 * [Architecture](#architecture)
 * [Prerequisites](#prerequisites)
-   * [Tools](#tools)
-      * [Install Cloud SDK](#install-cloud-sdk)
-      * [Install kubectl CLI](#install-kubectl-cli)
-      * [Install Terraform](#install-terraform)
-   * [Configure Authentication](#configure-authentication)
 * [Deployment](#deployment)
-   * [Create a new Stackdriver Account](#create-a-new-stackdriver-account)
-   * [Using Stackdriver Kubernetes Monitoring](#using-stackdriver-kubernetes-monitoring)
+  * [Create a new Stackdriver Account](#create-a-new-stackdriver-account)
+  * [Using Stackdriver Kubernetes Monitoring](#using-stackdriver-kubernetes-monitoring)
+* [Next Steps](#next-steps)
+* [Teardown](#next-steps)
 * [Troubleshooting](#troubleshooting)
 * [Relevant Material](#relevant-material)
+<!-- toc -->
 
 ## Introduction
+
 [Stackdriver Kubernetes Monitoring](https://cloud.google.com/monitoring/kubernetes-engine/) is a Stackdriver feature that more tightly integrates with GKE to better show you key stats about your cluster and the workloads and services running in it. Included in the new feature is functionality to import, as native Stackdriver metrics, metrics from pods with Prometheus endpoints. This allows you to use Stackdriver native alerting functionality with your Prometheus metrics without any additional workload.
 
 This tutorial will walk you through setting up Monitoring and visualizing metrics from a private GKE cluster.  It makes use of [Terraform](https://www.terraform.io/), a declarative [Infrastructure as Code](https://en.wikipedia.org/wiki/Infrastructure_as_Code) tool that enables configuration files to be used to automate the deployment and evolution of infrastructure in the cloud.  The logs from the Kubernetes Engine cluster will be leveraged to walk through the monitoring capabilities of Stackdriver.
-
 
 ## Architecture
 
@@ -29,35 +29,9 @@ The tutorial will walk you through logging and metrics for the cluster loaded in
 
 ## Prerequisites
 
-### Tools
-1. [Terraform >= 0.12.3](https://www.terraform.io/downloads.html)
-2. [Google Cloud SDK version >= 244.0.0](https://cloud.google.com/sdk/docs/downloads-versioned-archives)
-3. [kubectl matching the latest GKE version](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
+### Deploy the Base Cluster
 
-You can obtain a [free trial of GCP](https://cloud.google.com/free/) if you need one
-
-#### Install Cloud SDK
-The Google Cloud SDK is used to interact with your GCP resources.
-[Installation instructions](https://cloud.google.com/sdk/downloads) for multiple platforms are available online.
-
-#### Install kubectl CLI
-
-The kubectl CLI is used to interteract with both Kubernetes Engine and kubernetes in general.
-[Installation instructions](https://cloud.google.com/kubernetes-engine/docs/quickstart)
-for multiple platforms are available online.
-
-#### Install Terraform
-
-Terraform is used to automate the manipulation of cloud infrastructure. Its
-[installation instructions](https://www.terraform.io/intro/getting-started/install.html) are also available online.
-
-### Configure Authentication
-
-The Terraform configuration will execute against your GCP environment and create a Kubernetes Engine cluster running a simple application.  The configuration will use your personal account to build out these resources.  To setup the default account the configuration will use, run the following command to select the appropriate account:
-
-```console
-$ gcloud auth application-default login
-```
+Deploy the base cluster in the target project as per the instructions in the top-level [README](../README.md#provisioning-the-kubernetes-engine-cluster) and configure your terminal to [access the private cluster](../README.md#accessing-the-private-cluster).
 
 ## Deployment
 
@@ -68,6 +42,7 @@ In this section we will create a Stackdriver Monitoring account so that we can e
 ### Create a new Stackdriver Account
 
 The following steps are used to setup a Stackdriver Monitoring account.
+
 1. Visit the **Monitoring** section of the GCP Console.  This will launch the process of creating a new Monitoring console if you have not created one before.
 2. On the **Create your free StackDriver account** page select the project you created earlier.  **Note:** You cannot change this setting once it is created.
 3. Click on the **Create Account** button.
@@ -83,24 +58,27 @@ The following steps are used to setup a Stackdriver Monitoring account.
 
 ### Using Stackdriver Kubernetes Monitoring
 
-For a thorough guide on how to observe your cluster with the new Stackdriver Kubernetes UI, see [Observing Your Kubernetes Clusters](https://cloud.google.com/monitoring/kubernetes-engine/observing).
+For a thorough guide on how to observe your cluster with the new Stackdriver Kubernetes UI, follow the steps in [Observing Your Kubernetes Clusters](https://cloud.google.com/monitoring/kubernetes-engine/observing).
 
+## Next Steps
+
+Return to the top-level [README](../README.md#guided-demos) to begin working on another topic area.
+
+## Teardown
+
+The resources created as a part of this demo do not need to be deleted explicitly. If you would like to continue working on other topics, refer to the [next steps](#next-steps).
+
+If you are completely finished working with the contents of this repository, follow the [teardown steps](../README.md#teardown) in the top-level [README](../README.md#teardown) to remove the cluster and supporting resources.
 
 ## Troubleshooting
 
-** The install script fails with a `Permission denied` when running Terraform.**
-The credentials that Terraform is using do not provide the
-necessary permissions to create resources in the selected projects. Ensure
-that the account listed in `gcloud config list` has necessary permissions to
-create resources. If it does, regenerate the application default credentials
-using `gcloud auth application-default login`.
+### Metrics Not Appearing or Uptime Checks not executing
 
-** Metrics Not Appearing or Uptime Checks not executing **
 After the scripts execute it may take a few minutes for the Metrics or Uptime Checks to appear.  Configure the items and give the system some time to generate metrics and checks as they someimes take time to complete.
 
 ## Relevant Material
+
 * [Stackdriver Kubernetes Monitoring](https://cloud.google.com/monitoring/kubernetes-engine/)
 * [Terraform Google Cloud Provider](https://www.terraform.io/docs/providers/google/index.html)
 
-
-**This is not an officially supported Google product**
+Note, **this is not an officially supported Google product**.

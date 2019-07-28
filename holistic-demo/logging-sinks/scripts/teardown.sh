@@ -16,7 +16,7 @@
 
 # "---------------------------------------------------------"
 # "-                                                       -"
-# "-  deletes the resouses created                         -"
+# "-  deletes the BQ dataset and log sinks                 -"
 # "-                                                       -"
 # "---------------------------------------------------------"
 
@@ -34,7 +34,7 @@ source "$ROOT"/scripts/common.sh
 # Otherwise we will run into the following error
 # "google_bigquery_dataset.gke-bigquery-dataset: googleapi:
 # Error 400: Dataset pso-helmsman-cicd-infra:gke_logs_dataset is still in use, resourceInUse"
-bq rm -r -f "${PROJECT}":"${BQ_LOG_DS}"
+bq rm --project_id="${PROJECT}" -r -f "${PROJECT}":"${BQ_LOG_DS}"
 
 # Tear down Terraform-managed resources and remove generated tfvars
 cd "$ROOT/terraform" && terraform destroy -input=false -auto-approve
