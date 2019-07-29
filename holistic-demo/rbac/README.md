@@ -3,40 +3,16 @@
 ## Table of Contents
 
 <!-- TOC -->
-
 * [Introduction](#introduction)
 * [Architecture](#architecture)
 * [Prerequisites](#prerequisites)
-  * [Tools](#tools)
-  * [Versions](#versions)
 * [Deployment](#deployment)
-  * [Authenticate gcloud](#authenticate-gcloud)
-  * [Configure gcloud settings](#configuring-gcloud-settings)
-  * [Provisioning the Applications and RBAC Configuration](#provisioning-the-applications-and-rbac-configuration)
 * [Validation](#validation)
 * [Scenario 1: Assigning permissions by user persona](#scenario-1-assigning-permissions-by-user-persona)
-  * [IAM - Role](#iam---role)
-    * [IAM - User](#iam---user)
-  * [Description of the test environment:](#description-of-the-test-environment)
-  * [Create the namespaces with:](#create-the-namespaces-with)
-  * [Create the roles with:](#create-the-roles-with)
-  * [Create the role bindings with:](#create-the-role-bindings-with)
-  * [Create a test pod with:](#create-a-test-pod-with)
-  * [Inspect it:](#inspect-it)
 * [Scenario 2: Assigning API permissions to a cluster application](#scenario-2-assigning-api-permissions-to-a-cluster-application)
-  * [Deploying the sample application](#deploying-the-sample-application)
-  * [Diagnosing an RBAC misconfiguration](#diagnosing-an-rbac-misconfiguration)
-  * [Fixing the serviceAccountName](#fixing-the-serviceaccountname)
-  * [Diagnosing insufficient privileges](#diagnosing-insufficient-privileges)
-  * [Identifying the application's role and permissions](#identifying-the-applications-role-and-permissions)
-  * [Adding permissions to a role](#adding-permissions-to-a-role)
-  * [Verifying successful configuration](#verifying-successful-configuration)
-  * [Key takeaways](#key-takeaways)
-* [Tear down](#tear-down)
-* [Troubleshooting](#troubleshooting)
-  * [Invalid fingerprint error during terraform apply](#invalid-fingerprint-error-during-terraform-apply)
+* [Next Steps](#next-steps)
+* [Teardown](#teardown)
 * [Relevant Material](#relevant-material)
-
 <!-- TOC -->
 
 ## Introduction
@@ -60,74 +36,20 @@ This tutorial focuses on the use of RBAC within a Kubernetes Engine cluster. It 
 
 ## Prerequisites
 
+### Deploy the Base Cluster
 
-### Run Demo in a Google Cloud Shell
-
-Click the button below to run the demo in a [Google Cloud Shell](https://cloud.google.com/shell/docs/).
-
-[![Open in Cloud Shell](http://gstatic.com/cloudssh/images/open-btn.svg)](https://console.cloud.google.com/cloudshell/open?cloudshell_git_repo=https://github.com/GoogleCloudPlatform/gke-rbac-demo.git&amp;cloudshell_image=gcr.io/graphite-cloud-shell-images/terraform:latest&amp;cloudshell_tutorial=README.md)
-
-
-All the tools for the demo are installed. When using Cloud Shell execute the following
-command in order to setup gcloud cli. When executing this command please setup your region
-and zone.
-
-```console
-gcloud init
-```
-
-
-### Tools
-1. [Terraform >= 0.12.3](https://www.terraform.io/downloads.html)
-2. [Google Cloud SDK version >= 244.0.0](https://cloud.google.com/sdk/docs/downloads-versioned-archives)
-3. [kubectl matching the latest GKE version](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
-4. bash or bash compatible shell
-5. [GNU Make 3.x or later](https://www.gnu.org/software/make/)
-
-#### Install Cloud SDK
-The Google Cloud SDK is used to interact with your GCP resources.
-[Installation instructions](https://cloud.google.com/sdk/downloads) for multiple platforms are available online.
-
-#### Install kubectl CLI
-
-The kubectl CLI is used to interteract with both Kubernetes Engine and kubernetes in general.
-[Installation instructions](https://cloud.google.com/kubernetes-engine/docs/quickstart)
-for multiple platforms are available online.
-
-#### Install Terraform
-
-Terraform is used to automate the manipulation of cloud infrastructure. Its
-[installation instructions](https://www.terraform.io/intro/getting-started/install.html) are also available online.
+Deploy the base cluster in the target project as per the instructions in the top-level [README](../README.md#provisioning-the-kubernetes-engine-cluster) and configure your terminal to [access the private cluster](../README.md#accessing-the-private-cluster)
 
 ## Deployment
 
 The steps below will walk you through using terraform to deploy applications and RBAC resources to a Kubernetes Engine cluster created by the [instructions at the root of this repository](../../README.md).
 
-### Authenticate gcloud
-
-Prior to running this demo, ensure you have authenticated your gcloud client by running the following command:
-
-```console
-gcloud auth application-default login
-```
-
-### Configure gcloud settings
-
-Run `gcloud config list` and make sure that `core/project` is still set to the same project where the Kubernetes cluster you created at the root of this repository resides. You can set the current value with the following commands:
-
-```console
-# Where the project name is my-project-id
-gcloud config set project my-project-id
-
-Updated property [core/project].
-```
-
 ### Provisioning the Applications and RBAC Configuration
 
-Next, apply the terraform configuration with:
+Create the necessary Service Account and IAM Roles:
 
 ```console
-# From within the project root, use make to apply the terraform
+cd holistic-demo/rbac
 make create
 ```
 
@@ -153,54 +75,22 @@ owner_sa_name = gke-tutorial-owner-rbac@my-project-id.iam.gserviceaccount.com
 
 ## Scenario 1: Assigning permissions by user persona
 
-### Accessing the Private Cluster
-
-This demo runs on top of the private GKE cluster built via the instructions at the base of this repository.  To access the private GKE API Server (aka "master" or "control plane"), this infrastructure includes a small GCE instance known as a "bastion host" which supports SSH "tunneling and HTTP proxying" to allow remote API Server access in a more secure manner.
-
-During the `make create` step, the following command was run and should _still be running in the background_:
-
-```console
-echo $(terraform output --state=../../terraform/terraform.tfstate bastion_ssh) -f tail -f /dev/null
-
-gcloud compute ssh demo-cluster-bastion --project my-project-id --zone us-central1-a -- -L8888:127.0.0.1:8888 -f tail -f /dev/null
-```
-
-This command creates an SSH tunnel to the `demo-cluster-bastion` GCE instance, forwards the **L**ocal host's port `8888` to `127.0.0.1:8888` on `demo-cluster-bastion`, runs this SSH in the background (`-f`), and runs a command that doesn't end (`tail -f /dev/null`).
-
-With this "SSH Tunnel" running in the background, any web traffic sent to our `localhost:8888` will be sent down the tunnel and connect to the [tiny proxy](https://tinyproxy.github.io/) instance running on the `demo-cluster-bastion` host listening on `localhost:8888`.
-
-Because `kubectl` honors the `HTTPS_PROXY` environment variable, this means that our `kubectl` commands can be sent securely over the SSH tunnel and through the HTTP(S) proxy and reach the GKE control plane inside that VPC network via its private IP.
-
-While it's possible to run `export HTTPS_PROXY=localhost:8888` in the current session, that environment variable is honored by other applications, which might not be desirable.  For the duration of this terminal session, setting a simple shell alias will make all `kubectl` commands use the SSH tunnel's HTTP proxy:
-
-```console
-alias kubectl="HTTPS_PROXY=localhost:8888 kubectl"
-```
-
-Now, every time `kubectl` is used within this terminal session, the shell will silently replace it with `HTTPS_PROXY=localhost:8888 kubectl`, and the connection will work as expected.
-
-To remove the alias if needed, run:
-
-```console
-unalias kubectl
-```
-
 ### IAM - Role
 
 A role named `kube-api-ro-xxxxxxxx` (where `xxxxxxxx` is a random string) has been created with the permissions below as part of the terraform configuration in `iam.tf`. These permissions are the minimum required for any user that requires access to the Kubernetes API.
 
-1. container.apiServices.get
-1. container.apiServices.list
-1. container.clusters.get
-1. container.clusters.getCredentials
+1. `container.apiServices.get`
+1. `container.apiServices.list`
+1. `container.clusters.get`
+1. `container.clusters.getCredentials`
 
 ### Simulating users
 
 Three service accounts have been created to act as Test Users:
 
-* admin: has admin permissions over the cluster and all resources
-* owner: has read-write permissions over common cluster resources
-* auditor: has read-only permissions within the dev namespace only
+* `admin` has admin permissions over the cluster and all resources
+* `owner` has read-write permissions over common cluster resources
+* `auditor` has read-only permissions within the dev namespace only
 
 ```console
 gcloud iam service-accounts list
@@ -213,19 +103,18 @@ GKE Tutorial Owner                      gke-tutorial-owner@myproject.iam.gservic
 
 ### Creating the RBAC rules
 
-Create the the namespaces, Roles, and RoleBindings by applying the `rbac.yaml` manifest:
+Switch to the `admin` service account:
 
 ```console
-# Switch to the admin SA
 make admin
 
 Switching to SA: admin
 ```
 
-Create the namespaces, roles, and bindings
+Create the the namespaces, Roles, and RoleBindings by applying the `rbac.yaml` manifest:
 
 ```console
-kubectl apply -f ./manifests/rbac.yaml
+k apply -f ./manifests/rbac.yaml
 
 namespace "dev" created
 namespace "prod" created
@@ -238,8 +127,9 @@ rolebinding.rbac.authorization.k8s.io "auditor-binding" created
 
 ### Managing resources as the owner
 
+Switch to the `owner` service account:
+
 ```console
-# Switch to the owner SA
 make owner
 
 Switching to SA: owner
@@ -248,21 +138,21 @@ Switching to SA: owner
 Create a `hello-server` deployment in each namespace:
 
 ```console
-kubectl create -n dev -f ./manifests/hello-server.yaml
+k create -n dev -f ./manifests/hello-server.yaml
 
 service/hello-server created
 deployment.apps/hello-server created
 ```
 
 ```console
-kubectl create -n prod -f ./manifests/hello-server.yaml
+k create -n prod -f ./manifests/hello-server.yaml
 
 service/hello-server created
 deployment.apps/hello-server created
 ```
 
 ```console
-kubectl create -n test -f ./manifests/hello-server.yaml
+k create -n test -f ./manifests/hello-server.yaml
 
 service/hello-server created
 deployment.apps/hello-server created
@@ -271,8 +161,7 @@ deployment.apps/hello-server created
 As the owner, you will also be able to view all pods:
 
 ```console
-# List all hello-server pods in all namespaces
-kubectl get pods -l app=hello-server --all-namespaces
+k get pods -l app=hello-server --all-namespaces
 
 NAMESPACE   NAME                            READY     STATUS    RESTARTS   AGE
 dev         hello-server-6c6fd59cc9-h6zg9   1/1       Running   0          6m
@@ -282,18 +171,18 @@ test        hello-server-6c6fd59cc9-sm6bs   1/1       Running   0          39s
 
 ### Viewing resources as the auditor
 
+Switch to the `auditor` service account:
+
 ```console
-# Switch to the "auditor" SA
 make auditor
 
 Switching to SA: auditor
 ```
 
-Attempt to list all pods
+Attempt to list all pods:
 
 ```console
-# List all hello-server pods in all namespaces
-kubectl get pods -l app=hello-server --all-namespaces
+k get pods -l app=hello-server --all-namespaces
 
 Error from server (Forbidden): pods is forbidden: User "gke-tutorial-auditor@myproject.iam.gserviceaccount.com" cannot list pods at the cluster scope: Required "container.pods.list" permission
 ```
@@ -303,7 +192,7 @@ The error indicates you don't have sufficient permissions. The auditor is restri
 Attempt to view pods in the dev namespace
 
 ```console
-kubectl get pods -l app=hello-server --namespace=dev
+k get pods -l app=hello-server --namespace=dev
 
 NAME                            READY     STATUS    RESTARTS   AGE
 hello-server-6c6fd59cc9-h6zg9   1/1       Running   0          13m
@@ -312,7 +201,7 @@ hello-server-6c6fd59cc9-h6zg9   1/1       Running   0          13m
 Attempt to view pods in the test namespace
 
 ```console
-kubectl get pods -l app=hello-server --namespace=test
+k get pods -l app=hello-server --namespace=test
 
 Error from server (Forbidden): pods is forbidden: User "gke-tutorial-auditor@myproject.iam.gserviceaccount.com" cannot list pods in the namespace "test": Required "container.pods.list" permission.
 ```
@@ -320,7 +209,7 @@ Error from server (Forbidden): pods is forbidden: User "gke-tutorial-auditor@myp
 Attempt to view pods in the prod namespace
 
 ```console
-kubectl get pods -l app=hello-server --namespace=prod
+k get pods -l app=hello-server --namespace=prod
 
 Error from server (Forbidden): pods is forbidden: User "gke-tutorial-auditor@myproject.iam.gserviceaccount.com" cannot list pods in the namespace "prod": Required "container.pods.list" permission.
 ```
@@ -328,16 +217,14 @@ Error from server (Forbidden): pods is forbidden: User "gke-tutorial-auditor@myp
 Finally, verify the that the auditor has read-only access by trying to create and delete a deployment in the dev namespace:
 
 ```console
-# Attempt to create a deployment
-kubectl create -n dev -f manifests/hello-server.yaml
+k create -n dev -f manifests/hello-server.yaml
 
 Error from server (Forbidden): error when creating "manifests/hello-server.yaml": services is forbidden: User "gke-tutorial-auditor@myproject.iam.gserviceaccount.com" cannot create services in the namespace "dev": Required "container.services.create" permission.
 Error from server (Forbidden): error when creating "manifests/hello-server.yaml": deployments.extensions is forbidden: User "gke-tutorial-auditor@myproject.iam.gserviceaccount.com" cannot create deployments.extensions in the namespace "dev": Required "container.deployments.create" permission.
 ```
 
 ```console
-# Attempt to delete the deployment
-kubectl delete deployment -n dev -l app=hello-server
+k delete deployment -n dev -l app=hello-server
 
 Error from server (Forbidden): deployments.extensions "hello-server" is forbidden: User "gke-tutorial-auditor@myproject.iam.gserviceaccount.com" cannot update deployments.extensions in the namespace "dev": Required "container.deployments.update" permission.
 ```
@@ -352,14 +239,18 @@ The sample application will run as a single pod that periodically retrieves all 
 
 Deploy the pod-labeler application. This will also deploy a Role, ServiceAccount, and RoleBinding for the pod.
 
+Switch to the `admin` service account:
+
 ```console
-# Switch to the "admin" SA
 make admin
 
 Switching to SA: admin
+```
 
-# Apply the pod-labeler configuration
-kubectl apply -f manifests/pod-labeler.yaml
+Apply the pod-labeler configuration:
+
+```console
+k apply -f manifests/pod-labeler.yaml
 
 role.rbac.authorization.k8s.io/pod-labeler created
 serviceaccount/pod-labeler created
@@ -369,21 +260,19 @@ deployment.apps/pod-labeler created
 
 ### Diagnosing an RBAC misconfiguration
 
-Now check the status of the pod. Once the container has finished creating, you'll see it error out. Investigate the error by inspecting the pods' events and logs
+Now check the status of the pod. Once the container has finished creating, you'll see it error out. Investigate the error by inspecting the pod's events and logs:
 
 ```console
-# Still as the admin SA
-
-# Check the pod status
-kubectl get pods -l app=pod-labeler
+k get pods -l app=pod-labeler
 
 NAME                           READY     STATUS    RESTARTS   AGE
 pod-labeler-6d9757c488-tk6sp   0/1       Error     1          1m
 ```
 
+View the most recent pod events:
+
 ```console
-# View the pod event stream
-kubectl describe pod -l app=pod-labeler | tail -n 20
+k describe pod -l app=pod-labeler | tail -n 20
 
 Events:
   Type     Reason     Age                     From                                                       Message
@@ -398,22 +287,13 @@ Events:
 
 ```
 
+Check the pod's logs:
+
 ```console
-# Check the pod's logs
-kubectl logs -l app=pod-labeler
+k logs -l app=pod-labeler
 
 Attempting to list pods
-Traceback (most recent call last):
-  File "label_pods.py", line 13, in <module>
-    ret = v1.list_namespaced_pod("default",watch=False)
-  File "build/bdist.linux-x86_64/egg/kubernetes/client/apis/core_v1_api.py", line 12310, in list_namespaced_pod
-  File "build/bdist.linux-x86_64/egg/kubernetes/client/apis/core_v1_api.py", line 12413, in list_namespaced_pod_with_http_info
-  File "build/bdist.linux-x86_64/egg/kubernetes/client/api_client.py", line 321, in call_api
-  File "build/bdist.linux-x86_64/egg/kubernetes/client/api_client.py", line 155, in __call_api
-  File "build/bdist.linux-x86_64/egg/kubernetes/client/api_client.py", line 342, in request
-  File "build/bdist.linux-x86_64/egg/kubernetes/client/rest.py", line 231, in GET
-  File "build/bdist.linux-x86_64/egg/kubernetes/client/rest.py", line 222, in request
-kubernetes.client.rest.ApiException: (403)
+...snip...
 Reason: Forbidden
 HTTP response headers: HTTPHeaderDict({'Date': 'Fri, 25 May 2018 15:33:15 GMT', 'Audit-Id': 'ae2a0d7c-2ab0-4f1f-bd0f-24107d3c144e', 'Content-Length': '307', 'Content-Type': 'application/json', 'X-Content-Type-Options': 'nosniff'})
 HTTP response body: {"kind":"Status","apiVersion":"v1","metadata":{},"status":"Failure","message":"pods is forbidden: User \"system:serviceaccount:default:default\" cannot list pods in the namespace \"default\": Unknown user \"system:serviceaccount:default:default\"","reason":"Forbidden","details":{"kind":"pods"},"code":403}
@@ -426,7 +306,7 @@ Based on this error, you can see a permissions error when trying to list pods vi
 By inspecting the pod's configuration, you can see it is using the default ServiceAccount rather than the custom Service Account:
 
 ```console
-kubectl get pod -oyaml -l app=pod-labeler
+k get pod -oyaml -l app=pod-labeler
 
 ...
 restartPolicy: Always
@@ -446,8 +326,7 @@ The `pod-labeler-fix-1.yaml` file contains the fix in the deployment's template 
 Apply the fix and view the resulting change:
 
 ```console
-# Apply the fix 1
-kubectl apply -f manifests/pod-labeler-fix-1.yaml
+k apply -f manifests/pod-labeler-fix-1.yaml
 
 role.rbac.authorization.k8s.io/pod-labeler unchanged
 serviceaccount/pod-labeler unchanged
@@ -455,9 +334,10 @@ rolebinding.rbac.authorization.k8s.io/pod-labeler unchanged
 deployment.apps/pod-labeler configured
 ```
 
+Now, confirm the change in the deployment configuration:
+
 ```console
-# View the change in the deployment configuration
-kubectl get deployment pod-labeler -oyaml
+k get deployment pod-labeler -oyaml
 
   ...
   restartPolicy: Always
@@ -470,58 +350,42 @@ kubectl get deployment pod-labeler -oyaml
 
 ### Diagnosing insufficient privileges
 
-Once again, check the status of the pod and you'll notice it is still erroring out, but with a different message this time.
+Once again, check the status of the pod and you'll notice it is still erroring out, but with a different message this time:
 
 ```console
-# Check the status of your pod
-kubectl get pods -l app=pod-labeler
+k get pods -l app=pod-labeler
 
 NAME                          READY     STATUS             RESTARTS   AGE
 pod-labeler-c7b4fd44d-mr8qh   0/1       CrashLoopBackOff   3          1m
 
 ```
 
+View the pod's logs:
+
 ```console
-# Check the pod's logs
-kubectl logs -l app=pod-labeler
+k logs -l app=pod-labeler
 
 Attempting to list pods
-labeling pod pod-labeler-c7b4fd44d-mr8qh
-Traceback (most recent call last):
-  File "label_pods.py", line 22, in <module>
-    api_response = v1.patch_namespaced_pod(name=i.metadata.name, namespace="default", body=body)
-  File "build/bdist.linux-x86_64/egg/kubernetes/client/apis/core_v1_api.py", line 15376, in patch_namespaced_pod
-  File "build/bdist.linux-x86_64/egg/kubernetes/client/apis/core_v1_api.py", line 15467, in patch_namespaced_pod_with_http_info
-  File "build/bdist.linux-x86_64/egg/kubernetes/client/api_client.py", line 321, in call_api
-  File "build/bdist.linux-x86_64/egg/kubernetes/client/api_client.py", line 155, in __call_api
-  File "build/bdist.linux-x86_64/egg/kubernetes/client/api_client.py", line 380, in request
-  File "build/bdist.linux-x86_64/egg/kubernetes/client/rest.py", line 286, in PATCH
-  File "build/bdist.linux-x86_64/egg/kubernetes/client/rest.py", line 222, in request
-kubernetes.client.rest.ApiException: (403)
+...snip...
 Reason: Forbidden
 HTTP response headers: HTTPHeaderDict({'Date': 'Fri, 25 May 2018 16:01:40 GMT', 'Audit-Id': '461fa750-57c9-4fea-8717-f1778828417f', 'Content-Length': '385', 'Content-Type': 'application/json', 'X-Content-Type-Options': 'nosniff'})
 HTTP response body: {"kind":"Status","apiVersion":"v1","metadata":{},"status":"Failure","message":"pods \"pod-labeler-c7b4fd44d-mr8qh\" is forbidden: User \"system:serviceaccount:default:pod-labeler\" cannot patch pods in the namespace \"default\": Unknown user \"system:serviceaccount:default:pod-labeler\"","reason":"Forbidden","details":{"name":"pod-labeler-c7b4fd44d-mr8qh","kind":"pods"},"code":403}
 ```
 
-Since this is failing on a PATCH operation, you can also see the error in stackdriver. This is useful if the application logs are not sufficiently verbose:
+Since this is failing on a `PATCH` operation, you can also see the error in Stackdriver. This is useful if the application logs are not sufficiently verbose. In the Stackdriver Logging page, click on the small "down arrow" at the far right of the search input, choose `Convert to Advanced Filter` and filter by:
 
 ```console
-
-On Stackdriver Logging page, click on the 'Advance filter' option and filter by:
-
 protoPayload.methodName="io.k8s.core.v1.pods.patch"
-
 ```
 
 ![Stack driver logs](./img/stackdriver.png)
 
 ### Identifying the application's role and permissions
 
-Use the ClusterRoleBinding to find the ServiceAccount's Role and permissions
+Use the `ClusterRoleBinding` to view the ServiceAccount's current Role and permissions:
 
 ```yaml
-# Inspect the rolebinding definition
-kubectl get rolebinding pod-labeler -oyaml
+k get rolebinding pod-labeler -oyaml
 
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -545,8 +409,7 @@ subjects:
 The RoleBinding shows you need to inspect the `pod-labeler` Role in the `default` namespace. Here you can see the role is only granted permission to list pods.
 
 ```yaml
-# Inspect the role definition
-kubectl get role pod-labeler -oyaml
+k get role pod-labeler -oyaml
 
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -581,11 +444,10 @@ rules:
   verbs: ["list","patch"] # Fix 2: adding permission to patch (update) pods
 ```
 
-Apply the fix and view the resulting configuration:
+Apply the fix:
 
 ```console
-# Apply Fix 2
-kubectl apply -f manifests/pod-labeler-fix-2.yaml
+k apply -f manifests/pod-labeler-fix-2.yaml
 
 role.rbac.authorization.k8s.io/pod-labeler configured
 serviceaccount/pod-labeler unchanged
@@ -593,9 +455,10 @@ rolebinding.rbac.authorization.k8s.io/pod-labeler unchanged
 deployment.apps/pod-labeler configured
 ```
 
+View the updated RBAC `Role` permissions and see that `PATCH` was added:
+
 ```console
-# View the resulting change
-kubectl get role pod-labeler -oyaml
+k get role pod-labeler -oyaml
 
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -621,27 +484,26 @@ rules:
 Because the pod-labeler may be in a back-off loop, the quickest way to test our fix is to kill the existing pod and let a new one take it's place:
 
 ```console
-# Kill the existing pod and let the deployment controller replace it
-kubectl delete pod -l app=pod-labeler
+k delete pod -l app=pod-labeler
 
 pod "pod-labeler-8845f6488-5fpt9" deleted
 ```
 
 ### Verifying successful configuration
 
-Finally, verify the new pod-labeler is running and check that the "updated" label has been applied.
+Finally, verify the new `pod-labeler` pod is running and check that the `updated` label has been applied.
 
 ```console
-# List all pods and show their labels
-kubectl get pods --show-labels
+k get pods --show-labels
 
 NAME                          READY     STATUS    RESTARTS   AGE       LABELS
 pod-labeler-c7b4fd44d-8g8ws   1/1       Running   0          1m        pod-template-hash=736098008,run=pod-labeler,updated=1527264742.09
 ```
 
+View the `pod-labeler` pod's logs:
+
 ```console
-# View the pod's logs to verify there are no longer any errors
-kubectl logs -l app=pod-labeler
+k logs -l app=pod-labeler
 
 Attempting to list pods
 labeling pod pod-labeler-6d9757c488-dftcr
@@ -652,63 +514,32 @@ labeling pod python-b89455c85-m284f
 ### Key take-aways
 
 * Container and API server logs will be your best source of clues for diagnosing RBAC issues.
-* Use RoleBindings or ClusterRoleBindings to determine which role is specifying the permissions for a pod.
-* API server logs can be found in stackdriver under the Kubernetes resource.
+* Use `RoleBindings` or `ClusterRoleBindings` to determine which role is specifying the permissions for a pod.
+* API server logs can be found in Stackdriver under the Kubernetes resource.
 * Not all API calls will be logged to stack driver. Frequent, or verbose payloads are omitted by the Kubernetes' audit policy used in Kubernetes Engine. The exact policy will vary by Kubernetes version, but can be found in the [open source codebase](https://github.com/kubernetes/kubernetes/blob/master/cluster/gce/gci/configure-helper.sh#L740)
 
-## Tear down
+## Next Steps
 
-Log out of the bastion host and run the following to destroy the environment:
+Return to the top-level [README](../README.md#guided-demos) to begin working on another topic area.
 
-```console
-make teardown
-```
+## Teardown
 
-```console
-...snip...
-google_service_account.auditor: Destruction complete after 0s
-module.network.google_compute_subnetwork.cluster-subnet: Still destroying... (ID: us-east1/kube-net-subnet, 10s elapsed)
-module.network.google_compute_subnetwork.cluster-subnet: Still destroying... (ID: us-east1/kube-net-subnet, 20s elapsed)
-module.network.google_compute_subnetwork.cluster-subnet: Destruction complete after 26s
-module.network.google_compute_network.gke-network: Destroying... (ID: kube-net)
-module.network.google_compute_network.gke-network: Still destroying... (ID: kube-net, 10s elapsed)
-module.network.google_compute_network.gke-network: Still destroying... (ID: kube-net, 20s elapsed)
-module.network.google_compute_network.gke-network: Destruction complete after 25s
-
-Destroy complete! Resources: 14 destroyed.
-```
-
-Gcloud is currently authenticated as one of the generated IAM service accounts.  To re-login as your primary gcloud user, run:
+Gcloud is most likely still authenticated as one of the generated IAM service accounts.  To re-login as your primary gcloud user, run:
 
 ```console
 gcloud auth login
 ```
 
-## Troubleshooting
-
-### My SSH Tunnel is no longer running.  How do I restart it?
-
-During the `make create` command, the `gcloud compute ssh` command is run to create the SSH tunnel, forward the local port `8888`, and background the session.  If it stops running and `kubectl` commands are no longer working, rerun it:
+The resources created by this RBAC demo can be removed without harming any resources used by other subject areas.  Ensure this command is being run from the `holistic-demo/rbac` directory and *not* the root of the repository:
 
 ```console
-`echo $(terraform output --state=../../terraform/terraform.tfstate bastion_ssh) -f tail -f /dev/null`
+cd holistic-demo/rbac
+make teardown
 ```
 
-### My SSH Tunnel is still running in the background.  How do I stop it?
+If you would like to continue working on other topics, refer to the [next steps](#next-steps).
 
-Because `gcloud` leverages the host's SSH client binary to run SSH sessions, the process name may vary.  The most reliable method is to find the `process id` of the SSH session and run `kill <pid>` or `pkill <processname>`
-
-```console
-ps -ef | grep "ssh.*L8888:127.0.0.1:8888" | grep -v grep
-
-579761 83734     1   0  9:53AM ??         0:00.02 /usr/local/bin/gnubby-ssh -t -i /Users/myuser/.ssh/google_compute_engine -o CheckHostIP=no -o HostKeyAlias=compute.192NNNNNNNN -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=/Users/myuser/.ssh/google_compute_known_hosts myuser@bas.tion.ip.addr -L8888:127.0.0.1:8888 -f tail -f /dev/null /dev/null
-```
-
-In this case, running `pkill gnubby-ssh` or `kill 83734` would end this SSH session.
-
-### The install script fails with a `Permission denied` when running Terraform
-
-The credentials that Terraform is using do not provide the necessary permissions to create resources in the selected projects. Ensure that the account listed in `gcloud config list` has necessary permissions to create resources. If it does, regenerate the application default credentials using `gcloud auth application-default login`.
+If you are completely finished working with the contents of this repository, follow the [teardown steps](../README.md#teardown) in the top-level [README](../README.md#teardown) to remove the cluster and supporting resources.
 
 ## Relevant Material
 
@@ -717,4 +548,4 @@ The credentials that Terraform is using do not provide the necessary permissions
 * [Kubernetes Service Account Authentication](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#service-account-tokens)
 * [Terraform Documentation](https://www.terraform.io/docs/providers/google/index.html)
 
-**This is not an officially supported Google product**
+Note, **this is not an officially supported Google product**.

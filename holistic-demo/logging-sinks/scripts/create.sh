@@ -17,7 +17,6 @@
 # "---------------------------------------------------------"
 # "-                                                       -"
 # "-  Create starts a GKE Cluster and installs             -"
-# "-  a Cassandra StatefulSet                              -"
 # "-                                                       -"
 # "---------------------------------------------------------"
 
@@ -28,9 +27,6 @@ set -o pipefail
 ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
 # shellcheck source=scripts/common.sh
 source "$ROOT"/scripts/common.sh
-
-# enable apis
-#"$ROOT"/scripts/enable-apis.sh
 
 # Generate the variables to be used by Terraform
 # shellcheck source=scripts/generate-tfvars.sh
