@@ -169,7 +169,8 @@ DIGEST        TAGS    TIMESTAMP
 In order for the default cluster's service account to have access to your cloud source repository, it must have the objectViewer role on the underlying storage bucket. This snippet will enable us to pull down images in our cluster:
 
 ``` console
-CLUSTER_NAME=demo-cluster
+# From the base directory of the repository
+CLUSTER_NAME="$(terraform output --state terraform/terraform.tfstate cluster_name)"
 gsutil iam ch serviceAccount:${CLUSTER_NAME}-node-sa@${PROJECT}.iam.gserviceaccount.com:objectViewer gs://artifacts.${PROJECT}.appspot.com
 ```
 
