@@ -53,9 +53,6 @@ if [[ -z "${PROJECT}" ]]; then
     echo "replace 'PROJECT' with the project name." 1>&2
     exit 1;
 fi
-# the CLUSTER_NAME is used by validate.sh
-# shellcheck disable=SC2034
-CLUSTER_NAME=stackdriver-logging
 
 # bigquery for GKE log
 # shellcheck disable=SC2034

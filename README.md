@@ -11,25 +11,21 @@
   * [Setup this project](#setup-this-project)
   * [Cluster Deployment](#cluster-deployment)
   * [Provisioning the Kubernetes Engine Cluster](#provisioning-the-kubernetes-engine-cluster)
-  * [Validation](#validation)
+  * [Accessing the Private Cluster](#accessing-the-private-cluster)
 * [Guided Demos](#guided-demos)
-* [Tear down](#tear-down)
+* [Teardown](#teardown)
+* [Troubleshooting](#troubleshooting)
 <!-- TOC -->
 
 ## Introduction
 
-This demo guides you through deploying a private GKE cluster and providing a base platform for exploring the several subject areas with hands-on guidance.
+This repository guides you through deploying a private GKE cluster and provides a base platform for hands-on exploration of several GKE related topics which leverage or integrate with that infrastructure.  After completing the exercises in all topic areas, you will have a deeper understanding of several core components of GKE and GCP as configured in an enterprise environment.
 
-You should first configure Anthos Configuration Management inside your Cluster:
+To follow this guide successfully:
 
-* [Anthos Configuration Management](#guided-demos) - Learn how to centrally manage your fleet of GKE Clusters using a "git-ops" workflow.
-
-After completing the [Anthos Configuration Management](#guided-demos) configuration, you can explore the following topics in any order you choose:
-
-1. [Binary Authorization](#guided-demos) - Learn how to enforce which containers run inside your GKE Cluster.
-1. [Role-Based Access Control](#guided-demos) - Understand how RBAC can be used to grant specific permissions to users and groups accessing the Kubernetes API.
-1. [Logging with Stackdriver](#guided-demos) - Learn how GKE Clusters send logs and metrics to Stackdriver and how to export those to Google Cloud Storage (GCS) Buckets for long term storage and BigQuery datasets for analysis.
-1. [Monitoring with Stackdriver](#guided-demos) - Learn how GKE Clusters send metrics to Stackdriver to monitor your cluster and container application performance.
+1. Install the prerequisite [tools](#prerequisites).
+1. [Deploy](#deployment) the base GKE Cluster in a project of your choosing.
+1. Proceed to the [guided demos](#guided-demos) section to learn more about each topic area via hands-on instruction.
 
 Additional topics will be added as they are integrated into this demo structure, so check back often.
 
@@ -47,7 +43,7 @@ Click the button below to run the demo in a [Google Cloud Shell](https://cloud.g
 
 [![Open in Cloud Shell](http://gstatic.com/cloudssh/images/open-btn.svg)](https://console.cloud.google.com/cloudshell/open?cloudshell_git_repo=https://github.com/GoogleCloudPlatform/gke-anthos-holistic-demo.git&amp;cloudshell_image=gcr.io/graphite-cloud-shell-images/terraform:latest&amp;cloudshell_tutorial=README.md)
 
-All the tools for the demo are installed. When using Cloud Shell execute the following
+When using Cloud Shell execute the following
 command in order to setup gcloud cli. When executing this command please setup your region
 and zone.
 
@@ -55,38 +51,44 @@ and zone.
 gcloud init
 ```
 
-### Tools
+#### Tools Needed in Cloud Shell
 
 1. [gke-tf](https://github.com/GoogleCloudPlatform/gke-terraform-generator) for your architecture in your `$PATH`
-1. [Terraform >= 0.12.3](https://www.terraform.io/downloads.html)
+
+Move on to the [Tools](#tools) section for installation instructions.
+
+### Run Demo on a Local Workstation
+
+#### Tools Needed
+
+1. A Google Cloud Platform project where you have `Project Owner` permissions to create VPC networks, service accounts, IAM Roles, GKE clusters, and more.
+1. `bash` or `bash` compatible shell
 1. [Google Cloud SDK version >= 244.0.0](https://cloud.google.com/sdk/docs/downloads-versioned-archives)
 1. [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/) matching the latest GKE version.
-1. `bash` or `bash` compatible shell
-1. A Google Cloud Platform project where you have `Project Owner` permissions to create VPC networks, service accounts, IAM Roles, GKE clusters, and more.
+1. [gke-tf](https://github.com/GoogleCloudPlatform/gke-terraform-generator) for your architecture in your `$PATH`
+1. [Terraform >= 0.12.3](https://www.terraform.io/downloads.html)
+
+### Tools
 
 #### Install Cloud SDK
 
 The Google Cloud SDK is used to interact with your GCP resources.
 [Installation instructions](https://cloud.google.com/sdk/downloads) for multiple platforms are available online.
 
-#### Install `gke-tf`
-
-The `gke-tf` CLI is used for generating the necessary Terraform infrastructure-as-code source files to build the VPC, networks, service accounts, IAM roles, and GKE cluster from a single configuration YAML file.  [Installation instructions](https://github.com/GoogleCloudPlatform/gke-terraform-generator/).
-
 #### Install `kubectl` CLI
 
 The kubectl CLI is used to interteract with both Kubernetes Engine and kubernetes in general.
 [Installation instructions](https://cloud.google.com/kubernetes-engine/docs/quickstart)
-for multiple platforms are available online.
+for multiple platforms are available online. Ensure that you download a version of `kubectl` that is equal to or newer than the version of the GKE cluster you are accessing.
+
+#### Install `gke-tf`
+
+The `gke-tf` CLI is used for generating the necessary Terraform infrastructure-as-code source files to build the VPC, networks, service accounts, IAM roles, and GKE cluster from a single configuration YAML file.  [Installation instructions](https://github.com/GoogleCloudPlatform/gke-terraform-generator/).
 
 #### Install `terraform`
 
 Terraform is used to automate the manipulation of cloud infrastructure. Its
 [installation instructions](https://www.terraform.io/intro/getting-started/install.html) are also available online.
-
-## Deployment
-
-The steps below will walk you through using terraform to deploy a Kubernetes Engine cluster that you will then use for installing test users, applications and RBAC roles.
 
 ### Authenticate gcloud
 
@@ -118,6 +120,10 @@ gcloud config set project my-project-id
 
 Updated property [core/project].
 ```
+
+## Deployment
+
+The steps below will walk you through using terraform to deploy a Kubernetes Engine cluster that you will then use for installing test users, applications and RBAC roles.
 
 ### Setup this project
 
@@ -172,9 +178,9 @@ terraform apply
 
 Enter `yes` to deploy the environment when prompted after running `terraform apply`.  This will take several minutes to build all the necessary GCP resources and GKE Cluster.
 
-### Validation
+### Accessing the Private Cluster
 
-When Terraform has successfully created the cluster, you will see several generated outputs:
+When Terraform has finished creating the cluster, you will see several generated outputs that will help you to access the private control plane:
 
 ```console
 Apply complete! Resources: 20 added, 0 changed, 0 destroyed.
@@ -190,9 +196,10 @@ cluster_name = demo-cluster
 get_credentials = gcloud container clusters get-credentials --project my-project-id --region us-central1 --internal-ip demo-cluster
 ```
 
-To access this private GKE cluster, first run the following command to obtain a valid set of Kubernetes credentials:
+In addition to the GKE cluster, a small GCE instance known as a "bastion host" was also provisioned which supports SSH "tunneling and HTTP proxying" to allow remote API Server access in a more secure manner. To access the GKE cluster, first run the following command to obtain a valid set of Kubernetes credentials:
 
 ```console
+echo $(terraform output get_credentials)
 $(terraform output get_credentials)
 
 Fetching cluster endpoint and auth data.
@@ -201,7 +208,7 @@ kubeconfig entry generated for demo-cluster.
 
 Notice that the `gcloud container clusters get-credentials` command specified the `--internal-ip` flag to use the private GKE Control Plane IP.
 
-Next, open up a **second** terminal and run the following command to create an SSH tunnel through
+Next, open up a **second** terminal in the `./terraform` directory and run the following command:
 
 ```console
 $(terraform output bastion_ssh)
@@ -211,54 +218,54 @@ permitted by applicable law.
 myusername@demo-cluster-bastion:~$
 ```
 
-This terminal will create an SSH session and also forward the local port `8888` to the local port `8888` on the bastion host.  If this SSH session disconnects, you will need to re-run it to be able to reach the GKE API.
+With this "SSH Tunnel" running and forwarding port `8888`, any web traffic sent to our `localhost:8888` will be sent down the tunnel and connect to the [tiny proxy](https://tinyproxy.github.io/) instance running on the `demo-cluster-bastion` host listening on `localhost:8888`.
 
-Back on the first terminal, run the following command to access the GKE cluster over the SSH proxy tunnel:
+If this SSH session disconnects, you will need to re-run the above command to reconnect and reach the GKE API.
+
+Because `kubectl` honors the `HTTPS_PROXY` environment variable, this means that our `kubectl` commands can be sent securely over the SSH tunnel and through the HTTP(S) proxy and reach the GKE control plane inside that VPC network via its private IP. While it's possible to run `export HTTPS_PROXY=localhost:8888` in the current session, that environment variable is honored by other applications, which might not be desirable.  For the duration of this terminal session, setting a simple shell alias will make all `kubectl` commands use the SSH tunnel's HTTP proxy:
 
 ```console
-echo $(terraform output bastion_kubectl)
-HTTPS_PROXY=localhost:8888 kubectl get pods --all-namespaces
+alias k="HTTPS_PROXY=localhost:8888 kubectl"
+```
+
+Now, every time `k` is used within this terminal session, the shell will silently replace it with `HTTPS_PROXY=localhost:8888 kubectl`, and the connection will work as expected.
+
+```console
+k get pods --all-namespaces
 
 NAMESPACE     NAME                                                        READY   STATUS    RESTARTS   AGE
 kube-system   calico-node-f49fd                                           2/2     Running   0          25m
 kube-system   calico-node-sj8pp                                           2/2     Running   0          25m
 kube-system   calico-node-tw84c                                           2/2     Running   0          26mZ
-
 ...snip...
-
 kube-system   prometheus-to-sd-4xb67                                      1/1     Running   0          27m
 kube-system   prometheus-to-sd-fnd2l                                      1/1     Running   0          27m
 kube-system   stackdriver-metadata-agent-cluster-level-594ff5c995-htszq   1/1     Running   3          28m
 ```
 
-You may wish to simplify the amount of typing by "aliasing" this command to `k`:
-
-```console
-alias k="HTTPS_PROXY=localhost:8888 kubectl"
-k get pods --all-namespaces
-```
-
-From this terminal session, in place of `kubectl`, you can use `k` to be the shortcut for running `HTTPS_PROXY=localhost:8888 kubectl`.  Now that you have successfully accessed your private GKE cluster, you can proceed with the next section.
-
 ## Guided Demos
 
-After following the guidance in the [Prerequisites](#prerequisites) section and successfully creating the base GKE Cluster and supporting resources in the [Deployment] section, you should proceed first to configure Anthos Configuration Management in your cluster.
+After following the guidance in the [Prerequisites](#prerequisites) section and successfully creating the base GKE Cluster and supporting resources in the [Deployment](#deployment) section, you will first want to configure Anthos Configuration Management in your cluster.
 
 1. [Anthos Configuration Management](anthos/README.md) - Learn how to centrally manage your fleet of GKE Clusters using a "git-ops" workflow.
 
 After completing the [Anthos Configuration Management](#guided-demos) configuration, you can explore the following topics in any order you choose:
 
-1. [Binary Authorization](holistic-demo/binary-auth/README.md) - Learn how to enforce which containers run inside your GKE Cluster.
-1. [Role-Based Access Control](holistic-demo/rbac/README.md) - Understand how RBAC can be used to grant specific permissions to users and groups accessing the Kubernetes API.
-1. [Logging with Stackdriver](holistic-demo/logging-sinks/README.md) - Learn how GKE Clusters send logs and metrics to Stackdriver and how to export those to Google Cloud Storage (GCS) Buckets for long term storage and BigQuery datasets for analysis.
-1. [Monitoring with Stackdriver](holistic-demo/monitoring/README.md) - Learn how GKE Clusters send metrics to Stackdriver to monitor your cluster and container application performance.
+* [Binary Authorization](holistic-demo/binary-auth/README.md) - Learn how to enforce which containers run inside your GKE Cluster.
+* [Role-Based Access Control](holistic-demo/rbac/README.md) - Understand how RBAC can be used to grant specific permissions to users and groups accessing the Kubernetes API.
+* [Logging with Stackdriver](holistic-demo/logging-sinks/README.md) - Learn how GKE Clusters send logs and metrics to Stackdriver and how to export those to Google Cloud Storage (GCS) Buckets for long term storage and BigQuery datasets for analysis.
+* [Monitoring with Stackdriver](holistic-demo/monitoring/README.md) - Learn how GKE Clusters send metrics to Stackdriver to monitor your cluster and container application performance.
 
-## Tear down
+## Teardown
 
-Log out of the bastion host by typing `exit` in that terminal sessions and run the following to destroy the environment via Terraform in the current terminal:
+This teardown step will remove the base GKE cluster and supporting resources that each topic area uses.  Only perform the following procedures when you have completed all the desired topics and wish to fully remove all demo resources.
+
+If you have completed any of the [guided-demos](#guided-demos), be sure to follow the __Teardown__ section of each one to fully remove the resources that were created.  After those are removed, you can remove the base cluster and its supported resources.
+
+Log out of the bastion host by typing `exit` in that terminal sessions and run the following to destroy the environment via Terraform in the current terminal from the base of the repository:
 
 ```console
-cd terraform # if not already in this directory
+cd terraform
 terraform destroy
 ```
 
@@ -271,4 +278,38 @@ google_compute_network.demo-network: Destruction complete after 25s
 Destroy complete! Resources: 20 destroyed.
 ```
 
-**This is not an officially supported Google product**
+If you have already followed the [Teardown](anthos/README.md#teardown) steps to delete the Cloud Source Repository, you can delete the local `anthos-demo` repository folder:
+
+```console
+rm -rf anthos/anthos-demo
+```
+
+All resources should now be fully removed.
+
+## Troubleshooting
+
+### Restarting a Failed SSH Tunnel
+
+During the `make create` command, the `gcloud compute ssh` command is run to create the SSH tunnel, forward the local port `8888`, and background the session.  If it stops running and `kubectl` commands are no longer working, rerun it:
+
+```console
+`echo $(terraform output --state=../../terraform/terraform.tfstate bastion_ssh) -f tail -f /dev/null`
+```
+
+### Stopping the SSH Tunnel that is Running in the Background
+
+Because `gcloud` leverages the host's SSH client binary to run SSH sessions, the process name may vary.  The most reliable method is to find the `process id` of the SSH session and run `kill <pid>` or `pkill <processname>`
+
+```console
+ps -ef | grep "ssh.*L8888:127.0.0.1:8888" | grep -v grep
+
+579761 83734     1   0  9:53AM ??         0:00.02 /usr/local/bin/gnubby-ssh -t -i /Users/myuser/.ssh/google_compute_engine -o CheckHostIP=no -o HostKeyAlias=compute.192NNNNNNNN -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=/Users/myuser/.ssh/google_compute_known_hosts myuser@bas.tion.ip.addr -L8888:127.0.0.1:8888 -f tail -f /dev/null /dev/null
+```
+
+In this case, running `pkill gnubby-ssh` or `kill 83734` would end this SSH session.
+
+### The install script fails with a `Permission denied` when running Terraform
+
+The credentials that Terraform is using do not provide the necessary permissions to create resources in the selected projects. Ensure that the account listed in `gcloud config list` has necessary permissions to create resources. If it does, regenerate the application default credentials using `gcloud auth application-default login`.
+
+Note, **this is not an officially supported Google product**.

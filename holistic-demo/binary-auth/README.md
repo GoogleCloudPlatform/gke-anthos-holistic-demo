@@ -1,23 +1,23 @@
-# Google Kubernetes Engine Binary Authorization Demo
+# Google Kubernetes Engine Binary Authorization
 
 ## Table of Contents
 
+<!-- toc -->
 * [Introduction](#introduction)
 * [Architecture](#architecture)
 * [Prerequisites](#prerequisites)
-   * [Tools](#tools)
-      * [Install Cloud SDK](#install-cloud-sdk)
-      * [Install kubectl CLI](#install-kubectl-cli)
-      * [Install Terraform](#install-terraform)
-   * [Configure Authentication](#configure-authentication)
-* [Deployment](#deployment)
-   * [Create a new Stackdriver Account](#create-a-new-stackdriver-account)
-   * [Using Stackdriver Kubernetes Monitoring](#using-stackdriver-kubernetes-monitoring)
-      * [Native Prometheus integration](#native-prometheus-integration)
+* [Using Binary Authorization](#using-binary-authorization)
+  * [Managing the Binary Authorization Policy](#managing-the-binary-authorization-policy)
+  * [Creating a Private GCR Image](#creating-a-private-gcr-image)
+  * [Denying All Images](#denying-all-images)
+  * [Denying Images Except From Whitelisted Container Registries](#denying-images-except-from-whitelisted-container-registries)
+  * [Enforcing Attestations](#enforcing-attestations)
+  * [Handling Emergency Situations](#handling-emergency-situations)
+* [Next Steps](#next-steps)
+* [Teardown](#teardown)
 * [Troubleshooting](#troubleshooting)
-* [Relevant Material](#relevant-material)
-
-
+* [Relevant Materials](#relevant-materials)
+<!-- toc -->
 
 ## Introduction
 
@@ -74,17 +74,17 @@ Once the container image has been built and the necessary attestations have been
 
 ## Prerequisites
 
-* Access to an existing Google Cloud project with the Kubernetes Engine service enabled. If you do not have a Google Cloud account, please signup for a free trial [here][2].
-* A Google Cloud account and project is required for this demo. The project must have the proper quota to run a Kubernetes Engine cluster with at least 2 vCPUs and 7.5GB of RAM. How to check your account's quota is documented here: [quotas][1].
-* Note: the Binary Authorization and Container Analysis APIs are currently in `beta`. [Read more][9] about the support level and SLAs given to APIs designated as `beta` before using these features in a production environment.
+### Deploy the Base Cluster
 
+Deploy the base cluster in the target project as per the instructions in the top-level [README](../README.md#provisioning-the-kubernetes-engine-cluster) and configure your terminal to [access the private cluster](../README.md#accessing-the-private-cluster)
+
+* Note: the Binary Authorization and Container Analysis APIs are currently in `beta`. [Read more][9] about the support level and SLAs given to APIs designated as `beta` before using these features in a production environment.
 
 ### Supported Operating Systems
 
 This demo can be run from MacOS, Linux, or, alternatively, directly from [Google Cloud Shell](https://cloud.google.com/shell/docs/). The latter option is the simplest as it only requires browser access to GCP and no additional software is required. Instructions for both alternatives can be found below.
 
-
-### Deploying the Demo:
+### Deploying the Demo
 
 For deployments without using Cloud Shell, you will need to have access to a computer providing a [bash](https://www.gnu.org/software/bash/) shell with the following tools installed:
 
@@ -94,29 +94,28 @@ For deployments without using Cloud Shell, you will need to have access to a com
 * [docker](https://www.docker.com)
 * [GnuPG](https://www.gnupg.org/)
 
-
 ## Using Binary Authorization
 
 ### Managing the Binary Authorization Policy
 
 To access the Binary Authorization Policy configuration UI, perform the following steps:
 
-* In the GCP console navigate to the **Security** -> **Binary Authorization** page.
-* You will see the following interface.  Click **Edit Policy** and then **Save Changes** to make and save changes.
+* In the GCP console navigate to the **Security** -> **Binary Authorization** page. You might be redirected to `Enable` the Binary Authorization API if you haven't already in this project.
+* You will see the following interface.
+
+![Welcome to Binary Authorization](images/welcomebinauthz.png)
+
+* Click **Configure Policy** and then **Save Policy** to make and save changes.
 
 ![Binary Authorization UI](images/binauthz1.png)
 
-To access the Binary Authorization Policy configuration via `gcloud`:
+To access the same Binary Authorization Policy configuration via `gcloud`:
 
 * Run `gcloud beta container binauthz policy export > policy.yaml`
 * Make the necessary edits to `policy.yaml`
 * Run `gcloud beta container binauthz policy import policy.yaml`
 
 The policy you are editing is the "default" policy, and it applies to *all GKE clusters in the GCP project* unless a cluster-specific policy is in place.  The recommendation is to create policies specific to each cluster and achieve successful operation (whitelisting registries as needed), and then set the default project-level policy to "Deny All Images".  Any new cluster in this project will then need its own cluster-specific policy.
-
-Upon clicking **Edit Policy**, the following will appear:
-
-![Binary Authorization Edit Policy](images/editpolicy.png)
 
 The default policy rule is to `Allow all images`.  This mimics the behavior as if Binary Authorization wasn't enabled on the cluster.  If the default rule is changed to `Disallow all images` or `Allow only images that have been approved by all of the following attestors`, then images that do not match the exempted registry image paths or do not have the required attestations will be blocked, respectively.
 
@@ -140,23 +139,29 @@ Authenticate docker to the project:
 gcloud auth configure-docker
 ```
 
-Set our `PROJECT_ID` shell variable:
+Set our `PROJECT` shell variable:
 
 ```console
-PROJECT_ID="$(gcloud config get-value project)" # Or replace with your current project ID
+PROJECT=$(gcloud config list --format 'value(core.project)' 2>/dev/null)
 ```
 
 Tag and push it to the current project's GCR:
 
 ```console
-docker tag gcr.io/google-containers/nginx "gcr.io/${PROJECT_ID}/nginx:latest"
-docker push "gcr.io/${PROJECT_ID}/nginx:latest"
+docker tag gcr.io/google-containers/nginx "gcr.io/${PROJECT}/nginx:latest"
+docker push "gcr.io/${PROJECT}/nginx:latest"
+
+...snip...
+4781101e0522: Mounted from google-containers/nginx latest: digest: sha256:0390753e0576e3eecf97076c3312d878240fc951f97c1e599ca55fbe4cb9e2bb size: 4051
 ```
 
 List the "private" nginx image in our own GCR repository:
 
 ```console
-gcloud container images list-tags "gcr.io/${PROJECT_ID}/nginx"
+gcloud container images list-tags "gcr.io/${PROJECT}/nginx"
+
+DIGEST        TAGS    TIMESTAMP
+0390753e0576  latest  2015-03-20T07:56:05
 ```
 
 ### Denying All Images
@@ -164,32 +169,74 @@ gcloud container images list-tags "gcr.io/${PROJECT_ID}/nginx"
 In order for the default cluster's service account to have access to your cloud source repository, it must have the objectViewer role on the underlying storage bucket. This snippet will enable us to pull down images in our cluster:
 
 ``` console
-CLUSTER_NAME=<CLUSTER_NAME>
+# From the base directory of the repository
+CLUSTER_NAME="$(terraform output --state terraform/terraform.tfstate cluster_name)"
 gsutil iam ch serviceAccount:${CLUSTER_NAME}-node-sa@${PROJECT}.iam.gserviceaccount.com:objectViewer gs://artifacts.${PROJECT}.appspot.com
 ```
 
 To prove that image denial by policy will eventually work as intended, we need to first verify that the cluster-specific allow rule is in place and allows all containers to run.
 
-To do this, launch a single `nginx` pod,  by adding nginx.yaml into the git. Adding the manifest will apply the yaml file and create the pod. Replace ${PROJECT_ID} in nginx.yaml with your Project ID. You will place the nginx.yaml file in ./namespaces/default/. You will want to create the namespace.yaml file in the default folder as well if you have not done so. The [Audit Namespace Example](https://github.com/GoogleCloudPlatform/csp-config-management/blob/1.0.0/foo-corp/namespaces/audit/namespace.yaml) provides a good guide.
+To do this, launch a single `nginx` pod, by adding nginx.yaml into the `anthos-demo` git repository created in the Anthos Config Management section. Adding the manifest to the Cloud Source Repository will cause the Anthos Config Management Operator already running inside the cluster to automatically apply the yaml file and create the pod.
+
+Create the directory to hold manifests targeted at the `default` namespace:
 
 ```console
-git add nginx.yaml
-git commit -m ‘<Description>’
+mkdir -p anthos/anthos-demo/namespaces/default
+```
+
+Create the object to represent the `default` namespace:
+
+```console
+cat > anthos/anthos-demo/namespaces/default/namespace.yaml << EOF
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: default
+EOF
+```
+
+Ensure the `PROJECT` environment variable is still set:
+
+```console
+PROJECT=$(gcloud config list --format 'value(core.project)' 2>/dev/null)
+```
+
+Create the `nginx.yaml` in the `default` namespace directory:
+
+```console
+cat > anthos/anthos-demo/namespaces/default/nginx.yaml << EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx
+spec:
+  containers:
+  - name: nginx
+    image: "gcr.io/${PROJECT}/nginx:latest"
+    ports:
+    - containerPort: 80
+EOF
+```
+
+Change to the `anthos-demo` repository on your local system, commit the changes, and push to the`master` branch of the remote `anthos-demo` repository.
+
+```console
+cd anthos/anthos-demo
+git add .
+git commit -m "Nginx in default namespace"
 git push origin master
 ```
 
-You should see a message stating that `pod "nginx" created` and the following after listing the pods:
+Ensure your shell alias is still configured to use the SSH tunnel proxy:
 
 ```console
-kubectl get pods
-NAME    READY     STATUS    RESTARTS   AGE
-nginx   1/1       Running   0          1m
+alias k="HTTPS_PROXY=localhost:8888 kubectl"
 ```
 
-Now, delete this pod by removing the nginx.yaml from git repository.
-
 ```console
- git rm --cached nginx.yaml
+k get pods
+NAME    READY     STATUS    RESTARTS   AGE
+nginx   1/1       Running   0          1m
 ```
 
 Next, let's prove that the Binary Authorization policy can block undesired images from running in our cluster. Under the Binary Authorization UI page, click **Edit Policy**, expand the `Cluster Rules` dropdown, click on the three vertical dots to the right of your Cluster rule, and click `edit`.  Then, select `Disallow all images`, click **Submit**.
@@ -200,20 +247,39 @@ Your policy should look similar to the following:
 
 Finally, click **Save Policy** to apply those changes.
 
-Now, add the nginx.yaml manifest again to git, to be able to run the pod.
+Verify the `nginx` pod is still running:
 
 ```console
-git add nginx.yaml
-git commit -m ‘<Description>’
-git push origin master
+k get pod nginx
+
+NAME    READY   STATUS    RESTARTS   AGE
+nginx   1/1     Running   0          7m58s
 ```
 
-This time, though, you should receive a message from the API server indicating that the policy prevented this pod from being successfully run. On the console, the details of this error can be found by looking at the events tab of the nginx workload.
+Because Binary Authorization policy only applies to *new* pods, the existing pod is unaffected.  To trigger the Anthos Config Management Operator to redeploy the `nginx` pod for us automatically, we can manually delete the `nginx` pod using `kubectl`:
 
 ``` console
-alias n="HTTPS_PROXY=localhost:8888 nomos'
-n status
-k get events
+k delete pod nginx
+
+pod "nginx" deleted
+```
+
+After waiting a few seconds to allow Anthos Config Management to recognize the missing `nginx` pod and try to recreate it, when we run `k get pods`, we'll see that it hasn't been created:
+
+```console
+k get pods
+
+No resources found.
+```
+
+Looking at the logs of the `syncer` pod in the `config-management-system` namespace, we can see that the operator attempted to create the `nginx` pod but was blocked by the Binary Authorization policy:
+
+```console
+k logs -n config-management-system -l app=syncer --tail=100
+
+...snip...
+[1] KNV2010: unable to create resource: KNV2010: failed to create "/v1, Kind=Pod", "default/nginx": pods "nginx" is forbidden: image policy webhook backend denied one or more images: Denied by cluster admission rule for us-central1.demo-cluster. Overridden by evaluation mode
+...snip...
 ```
 
 To be able to see when any and all images are blocked by the Binary Authorization Policy, navigate to the GKE Audit Logs in Stackdriver and filter on those error messages related to this activity.
@@ -222,36 +288,25 @@ To be able to see when any and all images are blocked by the Binary Authorizatio
 1. On this page, click the downward arrow on the far right of the "Filter by label or text search" input field, and select `Convert to advanced filter`.  Populate the text box with `resource.type="k8s_cluster" protoPayload.status.message="PERMISSION_DENIED"`
 1. You should see errors corresponding to the blocking of the `nginx` pod from running.
 
-
-Run the following to clean up and prepare for the next steps:
-```console
- git rm --cached nginx.yaml
-```
+![Permission Denied](images/permissiondenied.png)
 
 ### Denying Images Except From Whitelisted Container Registries
 
-Let's say that we actually want to allow *just* that nginx container to run.  The quickest step to enable this is to *whitelist* the registry that it comes from.  To do this, edit the Binary Authorization Policy and add a new image path entry.  The image below shows an example path, but you will want to use the output of the following command as your image path instead:
+Let's say that we actually want to allow *just* that nginx container to run.  The quickest step to enable this is to *whitelist* the registry that it comes from.  To do this, edit the Binary Authorization Policy and add a new image path entry to the .  The image below shows an example path, but you will want to use the output of the following command as your image path instead:
 
 ```console
-echo "gcr.io/${PROJECT_ID}/nginx*"
+echo "gcr.io/${PROJECT}/nginx*"
 ```
 
 ![Binary Authorization Whitelist](images/whitelist.png)
 
- Add the file to the git repository.
+After clicking `Save Policy`, the `nginx` pod should now be considered "whitelisted" and the Anthos Config Management Operator should have it started:
 
 ```console
-git add nginx.yaml
-git commit -m ‘<Description>’
-git push origin master
-```
+k get pod
 
-You should now be able to launch this pod and prove that registry whitelisting is working correctly.
-
-Run the following to clean up and prepare for the next steps:
-
-```console
- git rm --cached nginx.yaml
+NAME    READY   STATUS    RESTARTS   AGE
+nginx   1/1     Running   0          21s
 ```
 
 Note: Remove the image path exemption from the binary authorization policy in order to test attestations.
@@ -269,8 +324,7 @@ In this next example, you'll perform a manual attestation of a container image. 
 Project settings:
 
 ```console
-# Current project ID
-PROJECT_ID="$(gcloud config get-value project)" # Or replace with your current project ID
+PROJECT=$(gcloud config list --format 'value(core.project)' 2>/dev/null)
 ```
 
 Attestor name/email details:
@@ -304,7 +358,7 @@ Create the `ATTESTATION` note payload:
 ```console
 cat > ${NOTE_PAYLOAD_PATH} << EOF
 {
-  "name": "projects/${PROJECT_ID}/notes/${NOTE_ID}",
+  "name": "projects/${PROJECT}/notes/${NOTE_ID}",
   "attestation_authority": {
     "hint": {
       "human_readable_name": "${NOTE_DESC}"
@@ -321,14 +375,14 @@ curl -X POST \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer $(gcloud auth print-access-token)"  \
     --data-binary @${NOTE_PAYLOAD_PATH}  \
-    "https://containeranalysis.googleapis.com/v1beta1/projects/${PROJECT_ID}/notes/?noteId=${NOTE_ID}"
+    "https://containeranalysis.googleapis.com/v1beta1/projects/${PROJECT}/notes/?noteId=${NOTE_ID}"
 ```
 
 You should see the output from the prior command display the created note, but the following command will also list the created note:
 
 ```console
 curl -H "Authorization: Bearer $(gcloud auth print-access-token)"  \
-    "https://containeranalysis.googleapis.com/v1beta1/projects/${PROJECT_ID}/notes/${NOTE_ID}"
+    "https://containeranalysis.googleapis.com/v1beta1/projects/${PROJECT}/notes/${NOTE_ID}"
 ```
 
 #### Creating a PGP Signing Key
@@ -360,16 +414,16 @@ The next step is to create the "attestor" in the Binary Authorization API and ad
 Create the Attestor in the Binary Authorization API:
 
 ```console
-gcloud --project="${PROJECT_ID}" \
+gcloud --project="${PROJECT}" \
     beta container binauthz attestors create "${ATTESTOR}" \
     --attestation-authority-note="${NOTE_ID}" \
-    --attestation-authority-note-project="${PROJECT_ID}"
+    --attestation-authority-note-project="${PROJECT}"
 ```
 
 Add the PGP Key to the Attestor:
 
 ```console
-gcloud --project="${PROJECT_ID}" \
+gcloud --project="${PROJECT}" \
     beta container binauthz attestors public-keys add \
     --attestor="${ATTESTOR}" \
     --public-key-file="${PGP_PUB_KEY}"
@@ -378,7 +432,7 @@ gcloud --project="${PROJECT_ID}" \
 List the newly created Attestor:
 
 ```console
-gcloud --project="${PROJECT_ID}" \
+gcloud --project="${PROJECT}" \
     beta container binauthz attestors list
 ```
 
@@ -414,7 +468,7 @@ PGP_FINGERPRINT="$(gpg --list-keys ${ATTESTOR_EMAIL} | head -2 | tail -1 | awk '
 Obtain the SHA256 Digest of the container image:
 
 ```console
-IMAGE_PATH="gcr.io/${PROJECT_ID}/nginx"
+IMAGE_PATH="gcr.io/${PROJECT}/nginx"
 IMAGE_DIGEST="$(gcloud container images list-tags --format='get(digest)' $IMAGE_PATH | head -1)"
 ```
 
@@ -451,7 +505,7 @@ Create the attestation:
 ```console
 gcloud beta container binauthz attestations create \
     --artifact-url="${IMAGE_PATH}@${IMAGE_DIGEST}" \
-    --attestor="projects/${PROJECT_ID}/attestors/${ATTESTOR}" \
+    --attestor="projects/${PROJECT}/attestors/${ATTESTOR}" \
     --signature-file=${GENERATED_SIGNATURE} \
     --pgp-key-fingerprint="${PGP_FINGERPRINT}"
 ```
@@ -460,7 +514,7 @@ View the newly created attestation:
 
 ```console
 gcloud beta container binauthz attestations list \
-    --attestor="projects/${PROJECT_ID}/attestors/${ATTESTOR}"
+    --attestor="projects/${PROJECT}/attestors/${ATTESTOR}"
 ```
 
 #### Running an Image with Attestation Enforcement Enabled
@@ -470,7 +524,7 @@ The next step is to change the Binary Authorization policy to enforce that attes
 To change the policy to require attestation, first copy the full path/name of the attestation authority:
 
 ```console
-echo "projects/${PROJECT_ID}/attestors/${ATTESTOR}" # Copy this output to your copy/paste buffer
+echo "projects/${PROJECT}/attestors/${ATTESTOR}" # Copy this output to your copy/paste buffer
 ```
 
 Next, edit the Binary Authorization policy to `edit` the cluster-specific rule:
@@ -481,39 +535,52 @@ Select `Allow only images that have been approved by all of the following attest
 
 ![Edit Policy](images/attest2.png)
 
-Next, click on `Add Attestors` followed by `Add attestor by resource ID`.  Enter the contents of your copy/paste buffer in the format of `projects/${PROJECT_ID}/attestors/${ATTESTOR}`, then click `Add 1 Attestor`, `Submit`, and finally `Save Policy`.  The default policy should still show `Disallow all images`, but the cluster-specific rule should be requiring attestation.
+Next, click on `Add Attestors` followed by `Add attestor by resource ID`.  Enter the contents of your copy/paste buffer in the format of `projects/${PROJECT}/attestors/${ATTESTOR}`, then click `Add 1 Attestor`, `Submit`, and finally `Save Policy`.  The default policy should still show `Disallow all images`, but the cluster-specific rule should be requiring attestation.
 
 Now, obtain the most recent SHA256 Digest of the signed image from the previous steps:
 
 ```console
-# if you had not set earlier
-IMAGE_PATH="gcr.io/${PROJECT_ID}/nginx"
+IMAGE_PATH="gcr.io/${PROJECT}/nginx"
 IMAGE_DIGEST="$(gcloud container images list-tags --format='get(digest)' $IMAGE_PATH | head -1)"
 ```
 
-Update nginx.yaml to use the fully-qualified digest:
+Create `nginx-signed.yaml`
 
 ```console
-echo "${IMAGE_PATH}@${IMAGE_DIGEST} # Replace image in nginx.yaml
+cat > anthos/anthos-demo/namespaces/default/nginx-signed.yaml << EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-signed
+spec:
+  containers:
+  - name: nginx
+    image: "${IMAGE_PATH}@${IMAGE_DIGEST}"
+    ports:
+    - containerPort: 80
+EOF
 ```
 
-Now, run the pod by adding nginx.yaml manifest to git and verify success:
+Commit and push the manifest to the Cloud Source Repository so that Anthos Config Management can launch it automatically:
 
 ```console
+cd anthos/anthos-demo
 git add nginx.yaml
-git commit -m ‘<Description>’
+git commit -m "Signed nginx container"
 git push origin master
 ```
 
-
-Congratulations! You have now manually attested to a container image and enforced a policy for that image inside your GKE cluster.
-
-Run the following to clean up and prepare for the next steps:
+Verify that `nginx-signed` is running successfully:
 
 ```console
- git rm --cached nginx.yaml
+k get pod
+
+NAME           READY   STATUS    RESTARTS   AGE
+nginx          1/1     Running   0          12m
+nginx-signed   1/1     Running   0          26s
 ```
 
+Congratulations! You have now manually attested to a container image and enforced a policy for that image inside your GKE cluster.
 
 ### Handling Emergency Situations
 
@@ -527,23 +594,80 @@ Note: You will want to notify a security team when this occurs as this can be le
 
 ![Stackdriver break-glass filter](images/Stackdriver_break-glass-filter.png)
 
-To run an unsigned `nginx` container with the "break glass" annotation, add nginx-breakglass.yaml to git:
+Create an unsigned `nginx-breakglass` pod manifest:
 
 ```console
-git add nginx-breakglass.yaml
-git commit -m ‘<Description>’
+cat > anthos/anthos-demo/namespaces/default/nginx-breakglass.yaml <<EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-breakglass
+  annotations:
+    alpha.image-policy.k8s.io/break-glass: "true"
+spec:
+  containers:
+  - name: nginx
+    image: "nginx:latest"
+    ports:
+    - containerPort: 80
+EOF
+```
+
+Apply `nginx-breakglass.yaml` via Anthos Config Management:
+
+```console
+git add namespaces/default/nginx-breakglass.yaml
+git commit -m "breakglass nginx"
 git push origin master
+```
+
+This pod should now be running:
+
+```console
+k get pod
+
+NAME               READY   STATUS    RESTARTS   AGE
+nginx              1/1     Running   0          28m
+nginx-breakglass   1/1     Running   0          17s
+nginx-signed       1/1     Running   0          4m16s
 ```
 
 In Stackdriver, you should be able to refresh and see the break glass nginx pod log.
 
+## Next Steps
+
+Return to the top-level [README](../README.md#guided-demos) to begin working on another topic area.
+
+## Teardown
+
+The resources created as a part of this demo can be deleted without affecting resources needed by other topic areas covered in this repository.
+
+To delete the attestor:
+
+```console
+gcloud beta container binauthz attestors delete "$(gcloud beta container binauthz attestors list --format='value(name)')"
+```
+
+To restore the Binary Authorization policy to the default:
+
+1. Change `Disallow all images` to `Allow all images`.
+1. Remove all `Cluster specific rules`.
+1. Remove the `gcr.io/${PROJECT}/nginx*` whitelist rule from the `Image Paths` list.
+1. Click `Save Policy`.
+
+If you would like to continue working on other topics, refer to the [next steps](#next-steps).
+
+If you are completely finished working with the contents of this repository, follow the [teardown steps](../README.md#teardown) in the top-level [README](../README.md#teardown) to remove the cluster and supporting resources.
 
 ## Troubleshooting
 
-1. If you update the Binary Authorization policy and very quickly attempt to launch a new pod/container, the policy might not have time to take effect.  You may need to wait 30 seconds or more for the policy change to become active.  To retry, delete your pod using `kubectl delete <podname>` and resubmit the pod creation command.
-1. Run `gcloud container clusters list` command to check the cluster status.
-1. If you enable additional features like `--enable-network-policy`, `--accelerator`, `--enable-tpu`, or `--enable-metadata-concealment`, you may need to add additional registries to your Binary Authorization policy whitelist for those pods to be able to run.  Use `kubectl describe pod <podname>` to find the registry path from the image specification and add it to the whitelist in the form of `gcr.io/example-registry/*` and save the policy.
-1. If you get errors about quotas, please increase your quota in the project.  See [here][1] for more details.
+### Binary Authorization Policy Delay
+
+If you update the Binary Authorization policy and very quickly attempt to launch a new pod/container, the policy might not have time to take effect.  You may need to wait 30 seconds or more for the policy change to become active.  To retry, delete your pod using `kubectl delete <podname>` and resubmit the pod creation command.
+
+### Some pods are in CrashLoopBackoff or ErrImgPull
+
+If you enable additional features like `--enable-network-policy`, `--accelerator`, `--enable-tpu`, or `--enable-metadata-concealment`, you may need to add additional registries to your Binary Authorization policy whitelist for those pods to be able to run.  Use `kubectl describe pod <podname>` to find the registry path from the image specification and add it to the whitelist in the form of `gcr.io/example-registry/*` and save the policy.
 
 ## Relevant Materials
 
@@ -565,4 +689,4 @@ In Stackdriver, you should be able to refresh and see the break glass nginx pod 
 [8]: https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/
 [9]: https://cloud.google.com/terms/launch-stages
 
-**This is not an officially supported Google product**
+Note, **this is not an officially supported Google product**.

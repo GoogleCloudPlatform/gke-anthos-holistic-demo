@@ -16,7 +16,6 @@
 # bash "strict-mode", fail immediately if there is a problem
 set -euo pipefail
 
-
 admin "kubectl delete -n dev -f ./manifests/hello-server.yaml --ignore-not-found=true"
 admin "kubectl delete -n prod -f ./manifests/hello-server.yaml --ignore-not-found=true"
 admin "kubectl delete -n test -f ./manifests/hello-server.yaml --ignore-not-found=true"
