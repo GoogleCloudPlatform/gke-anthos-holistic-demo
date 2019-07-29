@@ -177,16 +177,16 @@ This creates the basic directory structure used by the Anthos Configuration Mana
 
 ## Creating Anthos Configurations
 
-Anthos Config Management keeps your enrolled clusters in sync using configs. A config is a YAML or JSON file that is stored in your repository and contains the same types of configuration details that you can manually apply to a cluster using the kubectl apply command. This [topic](https://cloud.google.com/anthos-config-management/docs/how-to/configs#examples) covers how configs work, how to write them, and how Anthos Config Management applies them to your enrolled clusters.
+Anthos Config Management keeps your enrolled clusters in sync using kubernetes manifests that are checked into a git source control repository. A kubernetes manifest is a YAML or JSON file that is stored in your repository and contains the same types of configuration details that you can manually apply to a cluster using the kubectl apply command. This [topic](https://cloud.google.com/anthos-config-management/docs/how-to/configs#examples) covers how configs work, how to write them, and how Anthos Config Management applies them to your enrolled clusters.
 
-### Creating a Configuration
+### Creating a Configuration Manifest
 
-When you create a config, you need to decide the best location in the repository and the fields to include.  The location of a config in the repository determines which cluster(s) it applies to.
+When you create a configuration manifest, you need to decide the best location in the repository and the fields to include.  The location of a configuration manifest in the repository determines which cluster(s) it applies to.
 
-1. Configs for cluster-scoped objects except for `namespaces` are stored in the `./clusters` directory of the repo.
-2. Configs for `namespaces` and `namespace`-scoped objects are stored in the `./namespaces` directory of the repo.
-3. Configs for Anthos Config Management components are stored in the `./system` directory of the repo.
-4. Config for the Config Management Operator is not stored directly in the repository and is not synced.
+1. Configuration manifests for cluster-scoped objects except for `namespaces` are stored in the `./clusters` directory of the repo.
+2. Configuration manifests for `namespaces` and `namespace`-scoped objects are stored in the `./namespaces` directory of the repo.
+3. Configuration manifests for Anthos Config Management components are stored in the `./system` directory of the repo.
+4. The configuration manifest for the Config Management Operator is not stored directly in the repository and is not synced.
 
 ### Example Configuration
 
@@ -219,7 +219,7 @@ git push
 
 ### Deploying the Configuration Management Operator
 
-To enroll a cluster in Anthos Config Management, you deploy the Anthos "Operator" manifest, create the `git-creds` `secret`, and finally configure the Operator.
+To enroll a cluster in Anthos Config Management, you deploy the Anthos "Operator" manifest, create the `git-creds` `secret`, and finally configure the Operator.  Note that currently, [Pod Security Policies](https://cloud.google.com/kubernetes-engine/docs/how-to/pod-security-policies) are not supported in conjunction with Anthos Config Management.
 
 After ensuring that you meet all the prerequisites, you can deploy the Operator by downloading and applying a YAML manifest.
 
@@ -227,6 +227,12 @@ Download the latest version of the Operator CRD using the following command:
 
 ```console
 gsutil cp gs://config-management-release/released/latest/config-management-operator.yaml config-management-operator.yaml
+```
+
+You may already have `kubectl` with the proxy settings aliased, but you can ensure this is set in the current terminal session:
+
+```console
+alias k="HTTPS_PROXY=localhost:8888 kubectl"
 ```
 
 Apply the manifest which installs the necessary components and starts the Operator:

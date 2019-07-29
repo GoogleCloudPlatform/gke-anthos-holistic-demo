@@ -287,6 +287,8 @@ To be able to see when any and all images are blocked by the Binary Authorizatio
 1. On this page, click the downward arrow on the far right of the "Filter by label or text search" input field, and select `Convert to advanced filter`.  Populate the text box with `resource.type="k8s_cluster" protoPayload.status.message="PERMISSION_DENIED"`
 1. You should see errors corresponding to the blocking of the `nginx` pod from running.
 
+![Permission Denied](images/permissiondenied.png)
+
 ### Denying Images Except From Whitelisted Container Registries
 
 Let's say that we actually want to allow *just* that nginx container to run.  The quickest step to enable this is to *whitelist* the registry that it comes from.  To do this, edit the Binary Authorization Policy and add a new image path entry to the .  The image below shows an example path, but you will want to use the output of the following command as your image path instead:

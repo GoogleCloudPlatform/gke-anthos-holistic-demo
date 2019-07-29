@@ -530,9 +530,10 @@ Gcloud is most likely still authenticated as one of the generated IAM service ac
 gcloud auth login
 ```
 
-The resources created by this RBAC demo can be removed without harming any resources used by other subject areas:
+The resources created by this RBAC demo can be removed without harming any resources used by other subject areas.  Ensure this command is being run from the `holistic-demo/rbac` directory and *not* the root of the repository:
 
 ```console
+cd holistic-demo/rbac
 make teardown
 ```
 

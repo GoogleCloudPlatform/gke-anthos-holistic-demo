@@ -54,7 +54,6 @@ gcloud init
 #### Tools Needed in Cloud Shell
 
 1. [gke-tf](https://github.com/GoogleCloudPlatform/gke-terraform-generator) for your architecture in your `$PATH`
-1. [Terraform >= 0.12.3](https://www.terraform.io/downloads.html)
 
 Move on to the [Tools](#tools) section for installation instructions.
 
@@ -80,7 +79,7 @@ The Google Cloud SDK is used to interact with your GCP resources.
 
 The kubectl CLI is used to interteract with both Kubernetes Engine and kubernetes in general.
 [Installation instructions](https://cloud.google.com/kubernetes-engine/docs/quickstart)
-for multiple platforms are available online.
+for multiple platforms are available online. Ensure that you download a version of `kubectl` that is equal to or newer than the version of the GKE cluster you are accessing.
 
 #### Install `gke-tf`
 
@@ -258,6 +257,8 @@ After completing the [Anthos Configuration Management](#guided-demos) configurat
 * [Monitoring with Stackdriver](holistic-demo/monitoring/README.md) - Learn how GKE Clusters send metrics to Stackdriver to monitor your cluster and container application performance.
 
 ## Teardown
+
+This teardown step will remove the base GKE cluster and supporting resources that each topic area uses.  Only perform the following procedures when you have completed all the desired topics and wish to fully remove all demo resources.
 
 If you have completed any of the [guided-demos](#guided-demos), be sure to follow the __Teardown__ section of each one to fully remove the resources that were created.  After those are removed, you can remove the base cluster and its supported resources.
 
