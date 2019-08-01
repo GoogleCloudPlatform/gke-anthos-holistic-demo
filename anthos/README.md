@@ -271,6 +271,8 @@ cat anthos-demo-key.pub
 
 Add the contents of the public SSH Key to your Cloud Source Repository SSH Keys configuration via the UI/Console [https://source.cloud.google.com/user/ssh_keys](https://source.cloud.google.com/user/ssh_keys).  Click `Register SSH Key`, use `anthos-demo` for the key name, copy/paste in the contents of the public key, and click `Register`.
 
+![register-ssh-key](images/register-ssh-key.png?raw=true)
+
 Add the private key to a new `secret` in the cluster:
 
 ```console
