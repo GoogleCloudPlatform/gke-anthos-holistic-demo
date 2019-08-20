@@ -29,6 +29,8 @@ To follow this guide successfully:
 
 Additional topics will be added as they are integrated into this demo structure, so check back often.
 
+Note, when you clone this repo, specify --recursive to pull down dependencies (ie, submodules).
+
 ## Architecture
 
 The `gke-tf` CLI tool in combination with the `gke-tf-demo.yaml` configuration file will generate the necessary `terraform` infrastructure-as-code in the `./terraform` directory.  Within the GCP project that you have `Project Owner` permissions, the generated `terraform` will be used to manage the lifecycle of all the required resources.  This includes the VPC networks, firewall rules, subnets, service accounts, IAM roles, GCE instances, and the GKE Cluster.

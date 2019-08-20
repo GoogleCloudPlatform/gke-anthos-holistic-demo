@@ -20,7 +20,7 @@ spec:
   region: "us-central1" # asia-northeast1, europe-west2, southamerica-east1
   regional: true
   addons:
-    istio: false
+    istio: true
     logging: "logging.googleapis.com/kubernetes"
     monitoring: "monitoring.googleapis.com/kubernetes"
     networkPolicy: true
