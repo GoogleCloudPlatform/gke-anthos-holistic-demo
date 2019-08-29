@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#! /usr/bin/env bash
 
 # Copyright 2018 Google LLC
 #
@@ -14,23 +14,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# "---------------------------------------------------------"
+# "-                                                       -"
+# "-  Creates cluster                                      -"
+# "-                                                       -"
+# "---------------------------------------------------------"
 set -o errexit
 set -o nounset
 set -o pipefail
 
+# Locate the root directory
 ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
-# shellcheck source=scripts/common.sh
-source "$ROOT/scripts/common.sh"
 
-TFVARS_FILE="$ROOT/terraform.tfvars"
-if [[ -f "${TFVARS_FILE}" ]]
-then
- rm "$ROOT/terraform.tfvars"
-fi
-
-# Generate the variables to be used by Terraform
-# shellcheck source=scripts/generate-tfvars.sh
-source "$ROOT/scripts/generate-tfvars.sh"
-
-# export PROJECT="$(gcloud config list project --format='value(core.project)')"
-gke-tf gen -d ./terraform -f gke-tf-demo.yaml -o -p ${PROJECT}
+# Initialize and run Terraform
+(cd "${ROOT}/terraform"; terraform init -input=false)
+(cd "${ROOT}/terraform"; terraform apply -input=false -auto-approve)

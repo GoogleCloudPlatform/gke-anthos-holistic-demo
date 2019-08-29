@@ -17,12 +17,16 @@ SHELL := /usr/bin/env bash
 
 # All is the first target in the file so it will
 # get picked up when you just run 'make' on its own
-all: check_shell check_python check_golang check_terraform check_docker \
-	check_base_files check_headers check_trailing_whitespace
+all: check_shell check_python check_golang check_docker \
+	check_base_files check_headers check_terraform
 
 # The .PHONY directive tells make that this isn't a real target and so
 # the presence of a file named 'check_shell' won't cause this target to stop
 # working
+
+.PHONY: lint
+lint: check_shell check_python check_golang check_docker check_base_files check_headers check_terraform
+
 .PHONY: check_shell
 check_shell:
 	@source test/make.sh && check_shell
@@ -34,11 +38,6 @@ check_python:
 .PHONY: check_golang
 check_golang:
 	@source test/make.sh && golang
-
-.PHONY: check_terraform
-check_terraform:
-	@scripts/setup-terraform-test.sh
-	@source test/make.sh && check_terraform
 
 .PHONY: check_docker
 check_docker:
@@ -52,11 +51,42 @@ check_base_files:
 check_shebangs:
 	@source test/make.sh && check_bash
 
-.PHONY: check_trailing_whitespace
-check_trailing_whitespace:
-	@source test/make.sh && check_trailing_whitespace
+# To be uncommented, after fixing whitespaces with istio
+# .PHONY: check_trailing_whitespace
+# check_trailing_whitespace:
+# 	@source test/make.sh && check_trailing_whitespace
 
 .PHONY: check_headers
 check_headers:
 	@echo "Checking file headers"
 	@python3.7 test/verify_boilerplate.py
+
+.PHONY: check_terraform
+check_terraform:
+	@scripts/setup-terraform-test.sh
+	@source test/make.sh && check_terraform
+
+
+
+
+
+################################################################################################
+#             Infrastructure bootstrapping and mgmt helpers                                    #
+################################################################################################
+
+# create/delete/validate is for CICD
+# 1. Creates the gke-tf and application gke clusters in separate projects
+.PHONY: create
+create:
+	@source scripts/create.sh
+
+# 2. Ensures that the gke-tf HTTPS endpoint is healthy and that a workload
+#    in the application cluster can fetch secrets from gke-tf.
+.PHONY: validate
+validate:
+	@source scripts/validate.sh
+
+# 3. Removes all resources built in the create step.
+.PHONY: teardown
+teardown:
+	@source scripts/teardown.sh

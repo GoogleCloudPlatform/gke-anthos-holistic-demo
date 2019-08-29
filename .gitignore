@@ -1,3 +1,36 @@
+# OSX leaves these everywhere on SMB shares
+._*
+
+# OSX trash
+.DS_Store
+
+
+# Emacs save files
+*~
+\#*\#
+.\#*
+
+# Vim-related files
+[._]*.s[a-w][a-z]
+[._]s[a-w][a-z]
+*.un~
+Session.vim
+.netrwhist
+
+### https://raw.github.com/github/gitignore/90f149de451a5433aebd94d02d11b0e28843a1af/Terraform.gitignore
+
+# Local .terraform directories
+**/.terraform/*
+
+# .tfstate files
+*.tfstate
+*.tfstate.*
+*.terraform
+*.tfvars
+# Crash log files
+crash.log
+
+
 output
 anthos/anthos-demo
 
@@ -26,8 +59,14 @@ tags
 
 dist
 
-.terraform
+# Ignore any .tfvars files that are generated automatically for each Terraform
+# run. Most .tfvars files are not managed as part of configuration and so should
+# not be included in version control.
 terraform.tfvars
+
+.terraform
+
+properties.env
 
 # Binary authz
 note_payload.json
