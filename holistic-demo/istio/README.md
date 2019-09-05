@@ -21,7 +21,7 @@ Note that the ID of the project is not always the same as the name. Also, please
 
 ## Terraform Deployment
 
-The Terraform in the istio directory is managed with a separate state file from the root holistic-demo. 
+The Terraform in the istio directory is managed with a separate state file from the root holistic-demo.
 
 ```
   source ./scripts/terraformcreation.sh
@@ -38,7 +38,7 @@ We will be copying yaml files into the anthos config management repository we se
 In order to configure for Istio, we need add a clusterrolebinding in our gke cluster:
 
 ```
-  mkdir $REPO_PATH/cluster 
+  mkdir $REPO_PATH/cluster
   cp $ROOT/config-management/cluster/clusterrolebinding.yaml $REPO_PATH/cluster/.
 ```
 
@@ -79,7 +79,7 @@ You will need to split the 'mesh-expansion' file into a file for each namespace 
 
 ```
   # YOUR TASK: Split mesh-expansion.yaml
-  
+
   # Commit the changes you made
   git add .
   git commit -m "Split mesh-expansion.yaml."

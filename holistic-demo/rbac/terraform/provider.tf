@@ -17,7 +17,7 @@ limitations under the License.
 // Pins the minimum versions of the providers
 provider "google" {
   project = var.project
-  version = "~> 2.11.0"
+  version = "~> 2.13.0"
 }
 
 provider "random" {

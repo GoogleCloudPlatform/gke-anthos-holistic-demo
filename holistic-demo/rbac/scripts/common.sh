@@ -21,7 +21,7 @@ auth_sa() {
   local sa=$1; shift;
   SA_EMAIL="$(terraform output --state=./terraform/terraform.tfstate ${sa}_sa_name)"
   terraform output --state="terraform/terraform.tfstate" "${sa}_sa_key" | gcloud auth activate-service-account --key-file=- "${SA_EMAIL}" 2> /dev/null
-  $(terraform output --state="../../terraform/terraform.tfstate" get_credentials) 2> /dev/null
+  $(terraform output --state="../../terraform/terraform.tfstate" get_credentials)
 }
 
 owner() {
@@ -37,7 +37,7 @@ admin() {
   # Switch kubectl auth to Admin
   auth_sa "admin"
   # shellcheck disable=SC2005
-  echo "$(HTTPS_PROXY=localhost:8888 ${command} 2>&1)"
+  echo "$(HTTPS_PROXY=localhost:8888 ${command})"
 }
 
 auditor() {

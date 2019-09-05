@@ -68,7 +68,7 @@ for VAR in "${ISTIO_CLUSTER}" "${ZONE}" "${REGION}" "${GCE_NETWORK}" \
            "${GCE_SUBNET}" "${GCE_SUBNET_CIDR}" "${ISTIO_NETWORK}" \
            "${ISTIO_SUBNET}" "${ISTIO_SUBNET_CIDR}" \
            "${ISTIO_SUBNET_CLUSTER_CIDR}" "${ISTIO_SUBNET_SERVICES_CIDR}" \
-           "${GCE_VM}" "${ISTIO_GKE_VERSION}" "${GKE_VERSION}"; do
+           "${GCE_VM}" "${ISTIO_GKE_VERSION}"; do
   variable_is_set "${VAR}"
 done
 
@@ -103,7 +103,7 @@ source $ROOT/scripts/terraformcreation.sh
 
 if [[ ! "$(kubectl get clusterrolebinding --field-selector metadata.name=cluster-admin-binding \
                                           -o jsonpath='{.items[*].metadata.name}')" ]]; then
-  
+
   kubectl create clusterrolebinding cluster-admin-binding \
     --clusterrole=cluster-admin --user="$(gcloud config get-value core/account)"
 fi
