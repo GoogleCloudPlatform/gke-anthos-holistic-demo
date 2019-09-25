@@ -34,21 +34,6 @@ validate:
 teardown:
 	@source $(ROOT)/scripts/teardown.sh
 
-.PHONY: reset_sa
-reset_sa:
-	@source ${ROOT}/scripts/reset_sa.sh
-
-.PHONY: admin
-admin:
-	@source ${ROOT}/scripts/switchto.sh admin
-
-.PHONY: owner
-owner:
-	@source ${ROOT}/scripts/switchto.sh owner
-
-.PHONY: auditor
-auditor:
-	@source ${ROOT}/scripts/switchto.sh auditor
 
 .PHONY: original
 original:

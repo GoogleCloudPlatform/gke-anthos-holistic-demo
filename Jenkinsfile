@@ -94,39 +94,60 @@ spec:
         }
     }
 
+
+
     stage('SubJobs') {
+
+    container(containerName) {
+        dir('holistic-demo/rbac/'){
+          try {
+            sh "make create"
+            sh "make validate"
+          } catch (err){
+            currentBuild.result = 'FAILURE'
+            echo "FAILURE caught echo ${err}"
+            throw err
+          }
+          finally {
+            sh "make teardown"
+            sh "gcloud auth activate-service-account --key-file=${GOOGLE_APPLICATION_CREDENTIALS}"
+            sh "make reset_sa"
+          }
+        }
+      }
       container(containerName) {
-          dir('holistic-demo/rbac/'){
-            try {
-              sh "make create"
-              sh "make validate"
-            } catch (err){
-              currentBuild.result = 'FAILURE'
-              echo "FAILURE caught echo ${err}"
-              throw err
-            }
-            finally {
-              sh "gcloud auth activate-service-account --key-file=${GOOGLE_APPLICATION_CREDENTIALS}"
-              sh "make teardown"
-            }
+        dir('holistic-demo/logging-sinks'){
+          try {
+            sh "gcloud auth activate-service-account --key-file=${GOOGLE_APPLICATION_CREDENTIALS}"
+            sh "make create"
+            sh "make validate"
+          } catch (err){
+            currentBuild.result = 'FAILURE'
+            echo "FAILURE caught echo ${err}"
+            throw err
+          }
+          finally {
+            sh "make teardown"
           }
         }
-        container(containerName) {
-          dir('holistic-demo/logging-sinks'){
-            try {
-              sh "gcloud auth activate-service-account --key-file=${GOOGLE_APPLICATION_CREDENTIALS}"
-              sh "make create"
-              sh "make validate"
-            } catch (err){
-              currentBuild.result = 'FAILURE'
-              echo "FAILURE caught echo ${err}"
-              throw err
-            }
-            finally {
-              sh "make teardown"
-            }
+      }
+      container(containerName) {
+        dir('holistic-demo/monitoring'){
+          try {
+            sh "gcloud auth activate-service-account --key-file=${GOOGLE_APPLICATION_CREDENTIALS}"
+            sh "make create"
+            sh "make validate"
+          } catch (err){
+            currentBuild.result = 'FAILURE'
+            echo "FAILURE caught echo ${err}"
+            throw err
+          }
+          finally {
+            sh "make teardown"
           }
         }
+      }
+
     }
 
   }
