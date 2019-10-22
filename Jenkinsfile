@@ -147,17 +147,28 @@ spec:
           }
         }
       }
-
+      container(containerName) {
+        dir('holistic-demo/binary-auth'){
+          try {
+            sh "make validate"
+          } catch (err){
+            currentBuild.result = 'FAILURE'
+            echo "FAILURE caught echo ${err}"
+            throw err
+          }
+        }
+      }
     }
+    
 
   }
-   catch (err) {
+    catch (err) {
       // if any exception occurs, mark the build as failed
       // and display a detailed message on the Jenkins console output
       currentBuild.result = 'FAILURE'
       echo "FAILURE caught echo ${err}"
       throw err
-   }
+    }
    finally {
      stage('Teardown') {
       container(containerName) {
